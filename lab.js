@@ -456,12 +456,82 @@
         lid.visible=lidRim.visible=false;
 
         const towel=new T.Group();
-        const towelMat=standard(p=>mix(p.water,p.bg,.42),{roughness:.92});
-        const towelFold=standard(p=>mix(p.water,p.bg,.64),{roughness:.92});
-        box(.96,.16,.85,towelMat,0,0,0,towel);
-        for(let i=0;i<5;i++) box(.92-i*.018,.032,.047,towelFold,0,.085,-.32+i*.15,towel);
-        towel.position.set(-3.92,2.86,.32);
-        towel.rotation.z=-.095;
+        const fabric=document.createElement('canvas');
+        fabric.width=fabric.height=192;
+        const fabricCtx=fabric.getContext('2d');
+        fabricCtx.fillStyle='#c0c0c0';
+        fabricCtx.fillRect(0,0,192,192);
+        // Offset rows of small yarn loops give the cloth a fine, non-uniform nap.
+        let fabricSeed=745;
+        for(let row=-1;row<33;row++) for(let col=-1;col<39;col++){
+          fabricSeed=(Math.imul(fabricSeed,1664525)+1013904223)>>>0;
+          const v=fabricSeed/4294967296;
+          const x=col*5+(row%2)*2.5,y=row*6+(v-.5)*1.7;
+          const shade=168+Math.round(v*56);
+          fabricCtx.strokeStyle='rgb('+shade+','+shade+','+shade+')';
+          fabricCtx.lineWidth=1.25;
+          fabricCtx.beginPath();
+          fabricCtx.ellipse(x,y,1.35+v*.53,2.05+v*.57,(v-.5)*.65,0,Math.PI*2);
+          fabricCtx.stroke();
+        }
+        const pile=new T.CanvasTexture(fabric);
+        pile.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+        const clothColor=p=>mix(mix(p.water,p.oxygen,.57),p.bg,p.light?.31:.16);
+        const clothProps={map:pile,bumpMap:pile,bumpScale:.017,roughness:1,sheen:.62,
+          sheenRoughness:.84,sheenColor:new T.Color(0xe3f4ef)};
+        const cloth=color(new T.MeshPhysicalMaterial(clothProps),clothColor);
+        const underside=color(new T.MeshPhysicalMaterial(clothProps),p=>mix(clothColor(p),p.muted,.26));
+        const binding=standard(p=>mix(clothColor(p),p.muted,.23),{roughness:.96});
+        const thread=color(new T.LineBasicMaterial({transparent:true,opacity:.62}),p=>mix(clothColor(p),p.bg,.39));
+        const drape=(x,z)=>.036*Math.cos(4.6*x+2.1*z)+.026*Math.sin(11*x-4.8*z)
+          -.17*Math.pow(Math.abs(z/.43),1.8)+.013*Math.sin(20*z+6*x);
+        function clothLayer(w,h,d,dy,dz,material){
+          const geom=new T.BoxGeometry(w,h,d,28,5,26);
+          const part=geom.getAttribute('position');
+          const r=.031;
+          const point=V(0,0,0), inner=point.clone();
+          for(let i=0;i<part.count;i++){
+            point.fromBufferAttribute(part,i);
+            inner.set(
+              T.MathUtils.clamp(point.x,-w/2+r,w/2-r),
+              T.MathUtils.clamp(point.y,-h/2+r,h/2-r),
+              T.MathUtils.clamp(point.z,-d/2+r,d/2-r)
+            );
+            point.sub(inner).setLength(r).add(inner);
+            const z=point.z+dz;
+            part.setXYZ(i,point.x+.022*Math.sin(8*z),point.y+dy+drape(point.x,z),z);
+          }
+          geom.computeVertexNormals();
+          return mesh(geom,material,0,0,0,towel);
+        }
+        clothLayer(.99,.08,.82,-.055,-.015,underside);
+        clothLayer(1.10,.092,.84,.007,.022,cloth);
+
+        const rimShape=new T.Shape();
+        const hemX=.512,hemZ=.385,hemR=.070;
+        rimShape.moveTo(-hemX+hemR,-hemZ);
+        rimShape.lineTo(hemX-hemR,-hemZ);
+        rimShape.quadraticCurveTo(hemX,-hemZ,hemX,-hemZ+hemR);
+        rimShape.lineTo(hemX,hemZ-hemR);
+        rimShape.quadraticCurveTo(hemX,hemZ,hemX-hemR,hemZ);
+        rimShape.lineTo(-hemX+hemR,hemZ);
+        rimShape.quadraticCurveTo(-hemX,hemZ,-hemX,hemZ-hemR);
+        rimShape.lineTo(-hemX,-hemZ+hemR);
+        rimShape.quadraticCurveTo(-hemX,-hemZ,-hemX+hemR,-hemZ);
+        const onCloth=(x,z,dy)=>V(x+.022*Math.sin(8*z),.057+drape(x,z)+dy,z);
+        const hemPath=new T.CatmullRomCurve3(
+          rimShape.getSpacedPoints(88).slice(0,-1).map(({x,y})=>onCloth(x,y+.022,0)),true
+        );
+        mesh(new T.TubeGeometry(hemPath,104,.009,6,true),binding,0,0,0,towel);
+        const stitches=[];
+        for(let i=0;i<86;i++){
+          for(const end of [0,.44]){
+            const p=rimShape.getPointAt((i+end)/86);
+            stitches.push(onCloth(p.x*.946,p.y*.932+.022,.005));
+          }
+        }
+        towel.add(new T.LineSegments(new T.BufferGeometry().setFromPoints(stitches),thread));
+        towel.rotation.z=-.14;
         towel.visible=false;
         scene.add(towel);
         const wood=standard(p=>mix(p.heat,p.fg,.35),{roughness:.8});
@@ -1165,7 +1235,10 @@
           actionHint.style.left='10px';
           actionHint.style.top='10px';
           if(!op?.source||reaction) return;
-          const a=placePoint(op.from), b=placePoint(op.to);
+          const sourcePoint=placePoint(op.from), b=placePoint(op.to);
+          const a=step===0
+            ? [U.clamp(sourcePoint[0]+(width<520?35:46),margin,width-margin),Math.max(margin,sourcePoint[1]-13)]
+            : sourcePoint;
           if(Math.hypot(b[0]-a[0],b[1]-a[1])<49){
             const choices=[[a[0]+52,a[1]],[a[0]-52,a[1]],[a[0],a[1]+52],[a[0],a[1]-52]];
             const valid=choices.filter(([x,y])=>x>=margin&&x<=width-margin&&y>=margin&&y<=height-margin);
@@ -1185,7 +1258,7 @@
           actionLine.style.left=visibleSource[0]+'px';actionLine.style.top=visibleSource[1]+'px';
           actionLine.style.width=Math.hypot(dx,dy)+'px';
           actionLine.style.transform='rotate('+Math.atan2(dy,dx)+'rad)';
-          return {a,b};
+          return {a,b,sourcePoint};
         }
         function clearActionDrag(){
           actionTouch=null;
@@ -1198,7 +1271,7 @@
           const bounds=stage.getBoundingClientRect(), path=layoutAction();
           if(!path) return false;
           const x=e.clientX-bounds.left,y=e.clientY-bounds.top;
-          if(!handle&&Math.hypot(x-path.a[0],y-path.a[1])>39) return false;
+          if(!handle&&Math.hypot(x-path.sourcePoint[0],y-path.sourcePoint[1])>39) return false;
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
           actionTouch={id:e.pointerId,x,y,...path,point:null,near:false};
@@ -1332,6 +1405,8 @@
 
           towel.visible=assembled&&step===0;
           towel.position.copy(towelStart).lerp(towelEnd,ease(0,.74));
+          const towelContact=ease(0,.74);
+          towel.rotation.set(.12*(1-towelContact),.08*(1-towelContact),-.14+.045*towelContact);
           match.visible=assembled&&step===3&&time<1.35;
           match.rotation.z=-1.22;
           match.position.copy(lampRest).lerp(wick,ease(0,.77));
