@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "stand-comparison",
+  "title": "铁架台对照摆放",
+  "summary": "两件器材复用同一个模型，只移动指定的铁架台。",
+  "instruments": [
+    { "id": "stand-1", "assetId": "stand", "assetVersion": 1, "position": [-0.27, 0, -0.05] },
+    { "id": "stand-2", "assetId": "stand", "assetVersion": 1, "position": [0.20, 0, -0.05], "rotationY": 0.25 }
+  ],
+  "steps": [
+    {
+      "id": "choose-second", "title": "选取指定器材", "instruction": "点选 2 号铁架台。",
+      "action": { "type": "select", "instrumentId": "stand-2" },
+      "observable": "2 号铁架台已选中。", "wrongFeedback": "请点选 2 号铁架台。"
+    },
+    {
+      "id": "move-second", "title": "移动到标记处", "instruction": "将 2 号铁架台移动到标记处，1 号保持原位。",
+      "action": { "type": "move-to", "instrumentId": "stand-2", "position": [0.20, 0, 0.27] },
+      "observable": "2 号已就位，1 号留在原位。", "wrongFeedback": "只移动 2 号铁架台。"
+    }
+  ]
+}

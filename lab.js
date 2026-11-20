@@ -1,6 +1,7 @@
 (() => {
       const root = document.getElementById('oxygen-lab-3d');
       const el = name => root.querySelector('[data-lab="' + name + '"]');
+      if (/^https?:$/.test(location.protocol)) el('site-brand').href = './platform/';
       window.lucide?.createIcons();
       try {
         build(window.THREE);
@@ -184,10 +185,36 @@
           const x=Math.cos(angle)*.347,z=Math.sin(angle)*.347;
           line([V(x,a,z),V(x,b,z)],p=>mix(p.bg,p.water,p.light?.39:.56),angle===.66?.44:.72,tube,8);
         }
-        const testRing=torus(.357,.051,steelDark,0,1.53,0,tube);
-        testRing.rotation.x=Math.PI/2;
-        const testRingTrim=torus(.357,.018,steelLight,0,1.59,0,tube);
-        testRingTrim.rotation.x=Math.PI/2;
+        const clampCollar=new T.Group();
+        clampCollar.name='Split test tube clamp';
+        clampCollar.position.y=1.53;
+        tube.add(clampCollar);
+        const jaws=[];
+        for(const sign of [-1,1]){
+          const jaw=new T.Group();
+          jaw.name=sign<0?'Fixed back jaw':'Moving front jaw';
+          clampCollar.add(jaw);
+          const start=sign<0?Math.PI+.17:.17, arc=Math.PI-.34;
+          const band=(radius,thickness,mat,y)=>{
+            const geo=new T.TorusGeometry(radius,thickness,10,28,arc);
+            geo.rotateZ(start);
+            geo.rotateX(Math.PI/2);
+            return mesh(geo,mat,0,y,0,jaw);
+          };
+          band(.386,.044,steelDark,0);
+          band(.389,.017,steelLight,.037);
+          band(.350,.017,rubber,0);
+          for(const a of [start,start+arc]){
+            const x=.385*Math.cos(a), z=.385*Math.sin(a);
+            const tip=mesh(new T.SphereGeometry(.043,12,7),steelDark,x,0,z,jaw);
+            tip.scale.set(1,1.20,1);
+          }
+          jaws.push(jaw);
+        }
+        const jawScrew=standard(p=>mix(p.muted,p.heat,.17),{metalness:.38,roughness:.43});
+        chord([.30,.0,-.17],[.46,.0,.17],.024,steelLight,clampCollar);
+        const thumbScrew=cyl(.065,.065,.043,jawScrew,.46,0,.182,clampCollar);
+        thumbScrew.rotation.x=Math.PI/2;
         const stopY=length+.095;
         const stopper=cyl(.283,.249,.285,rubber,0,stopY,0,tube);
         const stopperLip=cyl(.286,.286,.042,steelDark,0,stopY+.128,0,tube);
@@ -245,28 +272,82 @@
         chute.visible=false;
         payload.forEach(p=>{p.grain.visible=false;});
         tube.updateMatrixWorld(true);
-        standGroup.attach(testRing);
-        standGroup.attach(testRingTrim);
+        standGroup.attach(clampCollar);
         finishInstrument('tube');
         const lampX=-3.88, lampZ=.31;
+        const burnerSeat=.867, wickTip=1.105;
         shade(-3.92,.38,1,.9);
-        const burner=glass(p=>mix(p.muted,p.fg,.12),.61);
-        lathe([[0,.095],[.37,.095],[.48,.16],[.52,.24],[.5,.43],[.42,.57],[.27,.665],[.173,.72],[.171,.829]],burner,lampX,0,lampZ,scene,6);
-        const fuel=flat(p=>mix(p.water,p.bg,.55),{transparent:true,opacity:.4,depthWrite:false});
-        lathe([[0,.112],[.35,.112],[.441,.172],[.478,.252],[.465,.34],[0,.34]],fuel,lampX,0,lampZ,scene,5);
-        torus(.458,.023,glassRim,lampX,.168,lampZ,scene,8).rotation.x=Math.PI/2;
-        cyl(.19,.176,.12,steel,lampX,.818,lampZ);
-        cyl(.119,.155,.085,steelDark,lampX,.918,lampZ);
-        cyl(.044,.057,.125,cotton,lampX,1.007,lampZ);
+        const flint=p=>mix(p.muted,p.water,.20);
+        const burner=glass(flint,.70);
+        const lampEdge=flat(flint,{transparent:true,opacity:.49,depthWrite:false});
+        const lampGleam=flat(p=>mix(p.bg,p.water,.18),{transparent:true,opacity:.65,depthWrite:false});
+        const body=lathe([[0,.044],[.295,.044],[.352,.052],[.389,.080],[.408,.12],[.434,.19],[.464,.29],
+          [.504,.43],[.521,.52],[.511,.578],[.480,.630],[.432,.676],[.360,.718],[.284,.754],
+          [.220,.786],[.176,.835],[.158,.884],[.157,.916],[.178,.924],[.184,.947],[.183,.977],
+          [.171,.991],[.134,.991],[.128,.958],[.131,.889],[.149,.824],[.193,.779],[.258,.729],
+          [.349,.679],[.424,.631],[.471,.573],[.486,.515],[.461,.423],[.429,.29],[.390,.15],
+          [.363,.113],[.308,.101],[0,.101]],burner,lampX,0,lampZ,scene,6);
+        body.name='Glass reservoir';
+        const fuel=flat(p=>mix(p.water,p.bg,.76),{transparent:true,opacity:.22,depthWrite:false,side:T.DoubleSide});
+        const lampLiquid=lathe([[0,.105],[.317,.105],[.367,.117],[.399,.175],[.429,.285],[.474,.451],
+          [.479,.468],[0,.468]],fuel,lampX,0,lampZ,scene,4);
+        lampLiquid.name='Alcohol and meniscus';
+        for(const [radius,thickness,y,mat] of [[.357,.018,.067,lampEdge],[.402,.010,.108,lampGleam],
+          [.479,.007,.469,lampEdge],[.170,.011,.959,lampGleam],[.207,.009,.804,lampEdge]]) {
+          torus(radius,thickness,mat,lampX,y,lampZ,scene,8).rotation.x=Math.PI/2;
+        }
+        const porcelain=standard(p=>mix(p.bg,p.muted,p.light?.09:.48),{roughness:.33});
+        const wickSeat=lathe([[.050,.922],[.133,.922],[.144,.935],[.142,.959],[.130,.984],[.104,1.007],[.057,1.016],[.047,1.004]],porcelain,lampX,0,lampZ);
+        wickSeat.name='Porcelain wick holder';
+        const wickPath=new T.CatmullRomCurve3([
+          V(.187,.136,.094),V(-.024,.237,.057),V(-.120,.375,.024),V(-.084,.541,-.016),
+          V(-.021,.756,-.012),V(0,.993,0),V(-.012,wickTip,0)
+        ]);
+        const wickYarn=standard(p=>mix(p.bg,p.muted,p.light?.37:.66),{roughness:1});
+        const wickTwist=standard(p=>mix(p.bg,p.muted,p.light?.18:.52),{roughness:1});
+        const wickFiber=mesh(new T.TubeGeometry(wickPath,60,.030,11,false),wickYarn,lampX,0,lampZ);
+        wickFiber.name='Curved cotton wick';
+        const twistFrames=wickPath.computeFrenetFrames(64,false);
+        for(let strand=0;strand<3;strand++){
+          const fiber=new T.CatmullRomCurve3(twistFrames.normals.map((normal,i)=>{
+            const u=i/64,angle=u*Math.PI*31+strand*Math.PI*2/3;
+            return wickPath.getPointAt(u).addScaledVector(normal,.026*Math.cos(angle))
+              .addScaledVector(twistFrames.binormals[i],.026*Math.sin(angle));
+          }));
+          mesh(new T.TubeGeometry(fiber,90,.007,6,false),wickTwist,lampX,0,lampZ);
+        }
+        chord([lampX-.009,1.068,lampZ],[lampX-.012,wickTip,lampZ],.027,rubber);
         const flame = new T.Group();
-        flame.position.set(lampX,1.025,lampZ);
+        flame.position.set(lampX,wickTip-.065,lampZ);
         scene.add(flame);
         const flameMat=flat(p=>mix(p.heat,p.yellow,.19),{transparent:true,opacity:.73,depthWrite:false});
-        const innerMat=flat(p=>mix(p.yellow,p.bg,.33),{transparent:true,opacity:.86,depthWrite:false});
-        const blueMat=flat(p=>mix(p.water,p.purple,.11),{transparent:true,opacity:.7,depthWrite:false});
-        lathe([[0,0],[.118,.04],[.178,.23],[.178,.40],[.134,.62],[.078,.82],[.026,1.04],[0,1.13]],flameMat,0,0,0,flame,8);
-        lathe([[0,.048],[.084,.11],[.102,.24],[.081,.40],[.044,.54],[0,.79]],innerMat,0,0,0,flame,9);
-        lathe([[0,.002],[.091,.03],[.102,.09],[.092,.16],[0,.245]],blueMat,0,0,0,flame,10);
+        const flameVertex='varying vec3 point; varying vec3 norm; void main(){point=position; norm=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}';
+        const flameSurface = new T.ShaderMaterial({
+          transparent:true,depthWrite:false,vertexShader:flameVertex,
+          fragmentShader:[
+            'varying vec3 point; varying vec3 norm;',
+            'void main(){float y=point.y;float facing=abs(normalize(norm).z);',
+            'vec3 base=vec3(.11,.38,.99), amber=vec3(1.,.36,.025), lemon=vec3(1.,.84,.13);',
+            'vec3 color=mix(base,amber,smoothstep(.10,.26,y));color=mix(color,lemon,smoothstep(.22,.55,y));',
+            'color=mix(color,vec3(1.,.96,.66),smoothstep(.44,.75,y)*facing);',
+            'float halo=(.18+.66*pow(facing,.67))*smoothstep(0.,.075,y)*(1.-.75*smoothstep(.82,1.12,y));',
+            'gl_FragColor=vec4(color,halo);',
+            '#include <colorspace_fragment>',
+            '}'
+          ].join('\n')
+        });
+        const outerFlame=lathe([[0,0],[.058,.024],[.096,.081],[.130,.151],[.150,.23],[.157,.32],[.147,.42],
+          [.125,.53],[.100,.64],[.077,.75],[.054,.85],[.029,.96],[.009,1.05],[0,1.12]],flameSurface,0,0,0,flame,9);
+        const flameShape=outerFlame.geometry.getAttribute('position');
+        for(let i=0;i<flameShape.count;i++) {
+          const y=flameShape.getY(i);
+          flameShape.setX(i,flameShape.getX(i)+.11*y*y-.038*y);
+          flameShape.setZ(i,flameShape.getZ(i)*.86);
+        }
+        outerFlame.geometry.computeVertexNormals();
+        const coreFlame=flat(()=>new T.Color(0xfff9be),{transparent:true,opacity:.70,depthWrite:false});
+        lathe([[0,.123],[.044,.175],[.074,.247],[.078,.331],[.064,.416],[.039,.511],[.017,.592],[0,.662]],
+          coreFlame,0,0,0,flame,8);
         flame.visible=false;
         finishInstrument('lamp');
 
@@ -1075,14 +1156,19 @@
         const seedPoint=V(-4.11,2.49,.32);
         let time=0,raf=0,currentWater, actionIndex=0, actionTouch=null, reaction=null, heldSource=false;
         const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-        const lampCap=lathe([[.204,0],[.201,.23],[.180,.271],[.052,.294],[0,.294]],steelDark,lampX,.854,lampZ);
+        const lampCap=lathe([[.209,0],[.225,.007],[.226,.025],[.214,.039],[.208,.067],[.199,.26],
+          [.190,.319],[.167,.376],[.133,.411],[.081,.440],[.031,.450],[0,.451],[0,.420],
+          [.079,.411],[.125,.387],[.160,.343],[.177,.273],[.184,.065],[.185,.025],[.190,0],[.209,0]],
+          porcelain,lampX,burnerSeat,lampZ);
+        lampCap.name='Porcelain snuffer cap';
         lampCap.visible=false;
         const laterJar=V(3.83,0,-1.34), zAxis=V(0,0,1);
         const originalJarPin=parts[3].xyz.clone();
         const waterParts=[jarWaterMesh,jarSurface,meniscus];
         const scope=(i,t)=>step>i||(step===i&&time>=t);
         const towelStart=V(-2.94,3.62,.60), towelEnd=V(-3.92,2.90,.32);
-        const mouthWet=V(jarX,.71,jarZ), wick=V(lampX,1.08,lampZ), lampRest=V(lampX+.79,1.8,lampZ+.24);
+        const mouthWet=V(jarX,.71,jarZ), wick=V(lampX-.012,wickTip,lampZ), lampRest=V(lampX+.79,1.8,lampZ+.24);
+        const capRest=V(lampX+.85,.07,lampZ+.51);
         const jarPark=V(laterJar.x,2.35,laterJar.z), jarBath=V(jarX,2.18,jarZ);
         const testMouth=V(laterJar.x,3.01,laterJar.z);
         const waterPlateRest=V(.85,1.41,1.45);
@@ -1135,7 +1221,7 @@
             grip('集气瓶','水槽旁的台面',jarBath,jarPark,11.60,12.90,'把盖好玻璃片的集气瓶取出，放到水槽旁。')
           ],
           [grip('导管末端','水面上方',bathPipe.end,dryPipe.end,0,.75,'保持酒精灯燃烧，先把导管提出水面。')],
-          [grip('灯帽','酒精灯',lampRest,V(lampX,1.24,lampZ),0,.84,'用灯帽盖住酒精灯，停止加热。')],
+          [grip('灯帽','酒精灯',capRest.clone().add(V(0,.22,0)),V(lampX,burnerSeat+.22,lampZ),0,.84,'把灯帽移到灯芯上方，再盖住酒精灯。')],
           [
             grip('玻璃片','集气瓶旁',testMouth,plateRest,0,.92,'移开盖在集气瓶口的玻璃片。'),
             grip('带火星的木条','集气瓶内',splintRest,V(laterJar.x,2.61,laterJar.z),.92,1.81,'把带火星的木条伸进集气瓶。',2.90)
@@ -1375,6 +1461,8 @@
           bathPipe.segment.visible=bathPipe.ring.visible=!moving&&useBath&&!stagedDry;
           dryPipe.segment.visible=dryPipe.ring.visible=!moving&&(dried||stagedDry);
           const loading=assembled&&step===1;
+          const jawOpening=loading?.18*(ease(.03,.5)-ease(5.56,6.14)):placed.has('tube')?0:.16;
+          jaws[1].position.z=jawOpening;
           const insert=ease(.40,2.08), out=ease(3.50,4.50);
           const tips=ease(2.08,2.73)-ease(4.35,5.05);
           const tiltOffset=scope(2,1.04)?0:step===2?.096*(1-ease(.30,1.04)):.096+(loading?.205*tips:0);
@@ -1410,8 +1498,10 @@
           match.visible=assembled&&step===3&&time<1.35;
           match.rotation.z=-1.22;
           match.position.copy(lampRest).lerp(wick,ease(0,.77));
-          lampCap.visible=assembled&&step>=6;
-          lampCap.position.copy(lampRest).lerp(V(lampX,.854,lampZ),step>6?1:ease(0,.84));
+          lampCap.visible=placed.has('lamp');
+          const capProgress=step>6?1:step===6?ease(0,.84):0;
+          lampCap.position.copy(capRest).lerp(V(lampX,burnerSeat,lampZ),capProgress);
+          lampCap.position.y+=.75*Math.sin(Math.PI*capProgress);
           splint.visible=assembled&&scope(7,.92);
           splintFlame.visible=splint.visible&&scope(7,1.81);
           const down=step>7?1:ease(.92,1.81);

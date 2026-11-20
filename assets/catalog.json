@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "id": "stand",
+      "version": 1,
+      "title": "铁架台",
+      "status": "candidate",
+      "model": "assets/stand/v1/stand.glb",
+      "source": "assets/stand/v1/stand.blend",
+      "preview": "assets/stand/v1/preview.png",
+      "anchors": {
+        "base": [0, 0, 0],
+        "clamp": [0.1, 0.26, 0]
+      },
+      "provenance": "项目原创 Blender 模型。参考本仓库现有 Three.js 铁架台的功能分件，未引入第三方资产。"
+    },
+    {
+      "id": "stand",
+      "version": 2,
+      "title": "铁架台（分体试管夹）",
+      "status": "candidate",
+      "model": "assets/stand/v2/stand.glb",
+      "source": "assets/stand/v2/stand.blend",
+      "preview": "assets/stand/v2/preview.png",
+      "anchors": {
+        "base": [0, 0, 0],
+        "clamp": [0.1352937, 0.244316, 0.135]
+      },
+      "provenance": "从修改后的项目原创制氧模型提取。圆环形试管夹由两片带衬垫的夹爪组成；大试管另为独立资产。"
+    },
+    {
+      "id": "test-tube",
+      "version": 1,
+      "title": "大试管",
+      "status": "candidate",
+      "model": "assets/test-tube/v1/test-tube.glb",
+      "source": "assets/test-tube/v1/test-tube.blend",
+      "preview": "assets/test-tube/v1/preview.png",
+      "anchors": {
+        "mouth": [0.1896354, 0.035, 0],
+        "closed-end": [-0.209048, 0.035, 0],
+        "clamp": [-0.022048, 0.035, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "alcohol-lamp",
+      "version": 1,
+      "title": "酒精灯",
+      "status": "candidate",
+      "model": "assets/alcohol-lamp/v1/alcohol-lamp.glb",
+      "source": "assets/alcohol-lamp/v1/alcohol-lamp.blend",
+      "preview": "assets/alcohol-lamp/v1/preview.png",
+      "anchors": {
+        "base": [0, 0, 0],
+        "wick": [0.001, 0.096, -0.0004],
+        "cap-seat": [0, 0.084, 0],
+        "cap-rest": [-0.068, 0, 0.03]
+      },
+      "provenance": "项目原创 Blender 模型，依据会话参考图重建；未嵌入参考图。"
+    },
+    {
+      "id": "glass-delivery-tube",
+      "version": 1,
+      "title": "玻璃导管（两段）",
+      "status": "candidate",
+      "model": "assets/glass-delivery-tube/v1/glass-delivery-tube.glb",
+      "source": "assets/glass-delivery-tube/v1/glass-delivery-tube.blend",
+      "preview": "assets/glass-delivery-tube/v1/preview.png",
+      "anchors": {
+        "inlet": [-0.0659908, 0.2031919, 0],
+        "outlet": [0.268, 0.05, 0],
+        "joint-in": [0.0651492, 0.1435786, 0],
+        "joint-out": [0.1028889, 0.1101317, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "water-trough",
+      "version": 1,
+      "title": "水槽",
+      "status": "candidate",
+      "model": "assets/water-trough/v1/water-trough.glb",
+      "source": "assets/water-trough/v1/water-trough.blend",
+      "preview": "assets/water-trough/v1/preview.png",
+      "anchors": {
+        "base": [0, 0, 0],
+        "rim": [0, 0.0835, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "gas-jar-rest",
+      "version": 1,
+      "title": "集气瓶支撑架",
+      "status": "candidate",
+      "model": "assets/gas-jar-rest/v1/gas-jar-rest.glb",
+      "source": "assets/gas-jar-rest/v1/gas-jar-rest.blend",
+      "preview": "assets/gas-jar-rest/v1/preview.png",
+      "anchors": {
+        "base": [0, 0, 0],
+        "support": [0, 0.0311, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "gas-jar",
+      "version": 1,
+      "title": "集气瓶",
+      "status": "candidate",
+      "model": "assets/gas-jar/v1/gas-jar.glb",
+      "source": "assets/gas-jar/v1/gas-jar.blend",
+      "preview": "assets/gas-jar/v1/preview.png",
+      "anchors": {
+        "base": [0, 0, 0],
+        "mouth": [0, 0.291, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "rubber-stopper",
+      "version": 1,
+      "title": "橡胶塞",
+      "status": "candidate",
+      "model": "assets/rubber-stopper/v1/rubber-stopper.glb",
+      "source": "assets/rubber-stopper/v1/rubber-stopper.blend",
+      "preview": "assets/rubber-stopper/v1/preview.png",
+      "anchors": {
+        "center": [0, 0, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "rubber-connector",
+      "version": 1,
+      "title": "橡胶接管",
+      "status": "candidate",
+      "model": "assets/rubber-connector/v1/rubber-connector.glb",
+      "source": "assets/rubber-connector/v1/rubber-connector.blend",
+      "preview": "assets/rubber-connector/v1/preview.png",
+      "anchors": {
+        "inlet": [-0.0188698, 0.0167235, 0],
+        "outlet": [0.0188698, -0.0167235, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "glass-plate",
+      "version": 1,
+      "title": "玻璃片",
+      "status": "candidate",
+      "model": "assets/glass-plate/v1/glass-plate.glb",
+      "source": "assets/glass-plate/v1/glass-plate.blend",
+      "preview": "assets/glass-plate/v1/preview.png",
+      "anchors": {
+        "center": [0, 0, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "lamp-cap",
+      "version": 1,
+      "title": "白瓷灯帽",
+      "status": "candidate",
+      "model": "assets/lamp-cap/v1/lamp-cap.glb",
+      "source": "assets/lamp-cap/v1/lamp-cap.blend",
+      "preview": "assets/lamp-cap/v1/preview.png",
+      "anchors": {
+        "seat": [0, 0, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "hot-towel",
+      "version": 1,
+      "title": "热毛巾",
+      "status": "candidate",
+      "model": "assets/hot-towel/v1/hot-towel.glb",
+      "source": "assets/hot-towel/v1/hot-towel.blend",
+      "preview": "assets/hot-towel/v1/preview.png",
+      "anchors": {
+        "center": [0, 0, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "paper-chute",
+      "version": 1,
+      "title": "装药纸槽",
+      "status": "candidate",
+      "model": "assets/paper-chute/v1/paper-chute.glb",
+      "source": "assets/paper-chute/v1/paper-chute.blend",
+      "preview": "assets/paper-chute/v1/preview.png",
+      "anchors": {
+        "tip": [-0.175048, -0.015, 0],
+        "handle": [0.2416354, -0.015, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "cotton-plug",
+      "version": 1,
+      "title": "棉花团",
+      "status": "candidate",
+      "model": "assets/cotton-plug/v1/cotton-plug.glb",
+      "source": "assets/cotton-plug/v1/cotton-plug.blend",
+      "preview": "assets/cotton-plug/v1/preview.png",
+      "anchors": {
+        "center": [0, 0, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "matchstick",
+      "version": 1,
+      "title": "火柴",
+      "status": "candidate",
+      "model": "assets/matchstick/v1/matchstick.glb",
+      "source": "assets/matchstick/v1/matchstick.blend",
+      "preview": "assets/matchstick/v1/preview.png",
+      "anchors": {
+        "head": [0, 0, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "wooden-splint",
+      "version": 1,
+      "title": "验氧小木条",
+      "status": "candidate",
+      "model": "assets/wooden-splint/v1/wooden-splint.glb",
+      "source": "assets/wooden-splint/v1/wooden-splint.blend",
+      "preview": "assets/wooden-splint/v1/preview.png",
+      "anchors": {
+        "tip": [0, 0, 0]
+      },
+      "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    }
+  ]
+}

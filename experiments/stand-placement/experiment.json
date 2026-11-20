@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "stand-placement",
+  "title": "铁架台摆放练习",
+  "summary": "识别铁架台，并把底座移动到实验台的标记处。",
+  "instruments": [
+    { "id": "stand-1", "assetId": "stand", "assetVersion": 1, "position": [-0.23, 0, 0] }
+  ],
+  "steps": [
+    {
+      "id": "identify", "title": "识别铁架台", "instruction": "点选铁架台。",
+      "action": { "type": "select", "instrumentId": "stand-1" },
+      "observable": "铁架台已选中。", "wrongFeedback": "请点选铁架台。"
+    },
+    {
+      "id": "place", "title": "摆放铁架台", "instruction": "将铁架台移动到台面标记处。",
+      "action": { "type": "move-to", "instrumentId": "stand-1", "position": [0.22, 0, 0] },
+      "observable": "底座已就位。", "wrongFeedback": "请选择铁架台并移到标记处。"
+    }
+  ]
+}

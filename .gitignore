@@ -4,3 +4,9 @@
 /.lab-*.png
 /.publish-ready
 /.publish-status
+/node_modules/
+/dist/
+/.lab-output/
+/experiments/*/references/
+/experiments/*/evidence/
+*.blend1

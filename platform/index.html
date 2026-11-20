@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#edf2f4">
+  <title>化学实验室</title>
+  <link rel="icon" href="../favicon.svg">
+  <link rel="stylesheet" href="./platform.css">
+  <script src="../vendor/lucide.min.js" defer></script>
+  <script src="./catalog.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-icon"><i data-lucide="flask-conical" aria-hidden="true"></i></span><span>化学实验室</span></div>
+  </header>
+  <main class="catalog">
+    <header class="catalog-heading">
+      <h1>实验项目</h1>
+      <output id="project-count" aria-label="实验项目数量"></output>
+    </header>
+    <p id="catalog-status" role="status">正在读取实验项目…</p>
+    <ul class="projects" id="projects" aria-label="实验项目"></ul>
+  </main>
+</body>
+</html>

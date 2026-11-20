@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "projects": [
+    {
+      "id": "oxygen-lab",
+      "title": "高锰酸钾制氧气",
+      "summary": "组装实验装置，观察排水集气和氧气检验。",
+      "kind": "legacy",
+      "href": "../"
+    }
+  ]
+}

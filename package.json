@@ -1,0 +1,17 @@
+{
+  "name": "chemistry-lab-workflow",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "lab": "node scripts/lab.mjs",
+    "dev": "node scripts/lab.mjs serve",
+    "check": "node scripts/lab.mjs check",
+    "build": "node scripts/lab.mjs build",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node scripts/smoke-browser.mjs"
+  },
+  "dependencies": { "@modelcontextprotocol/sdk": "1.32.2", "zod": "4.3.6" },
+  "devDependencies": { "playwright": "1.65.1" }
+}
