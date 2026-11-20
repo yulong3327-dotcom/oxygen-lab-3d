@@ -204,6 +204,7 @@
           cottonTufts.push(tuft);
           tuft.scale.set(.054+random()*.063,.045+random()*.058,.061+random()*.046);
         }
+        const cottonHome=cottonTufts.map(t=>t.position.clone());
         const crystalGeo=new T.DodecahedronGeometry(1,0);
         const crystals=[];
         const grains=Array.from({length:5},(_,i)=>standard(p=>mix(p.purple,p.fg,.29+i*.09),{roughness:.66,flatShading:true}));
@@ -218,6 +219,31 @@
           crystal.rotation.set(random()*7,random()*7,random()*7);
         }
 
+        const chute=new T.Group();
+        tube.add(chute);
+        const paper=standard(p=>mix(p.bg,p.yellow,p.light?.18:.48),{roughness:.92,side:T.DoubleSide});
+        const paperEdge=standard(p=>mix(p.muted,p.heat,.20),{roughness:.84});
+        const paperLength=length+.52;
+        const floorX=.168, lipX=.059, half=.174;
+        const section = [[lipX,-half],[floorX,0],[lipX,half]];
+        for(let i=0;i<2;i++){
+          const [x,z]=section[i], [xx,zz]=section[i+1];
+          const g=new T.BufferGeometry();
+          g.setAttribute('position',new T.Float32BufferAttribute([x,0,z,xx,0,zz,xx,paperLength,zz,x,paperLength,z],3));
+          g.setIndex([0,1,2,0,2,3]);
+          g.computeVertexNormals();
+          mesh(g,paper,0,0,0,chute,4);
+          chord([x,0,z],[x,paperLength,z],.010,paperEdge,chute);
+        }
+        chord([lipX,0,half],[lipX,paperLength,half],.010,paperEdge,chute);
+        const payload=crystals.map((source,i)=>{
+          const grain=mesh(crystalGeo,source.material,0,0,0,tube);
+          grain.scale.copy(source.scale).multiplyScalar(.89);
+          grain.rotation.copy(source.rotation);
+          return {grain,destination:source.position.clone(),y:.07+((i*13)%61)/126,z:(((i*17)%43)-21)/264};
+        });
+        chute.visible=false;
+        payload.forEach(p=>{p.grain.visible=false;});
         tube.updateMatrixWorld(true);
         standGroup.attach(testRing);
         standGroup.attach(testRingTrim);
@@ -516,6 +542,41 @@
         const guideLines=color(new T.LineBasicMaterial({transparent:true,opacity:.21,depthWrite:false}),p=>p.water);
         const guideMeshes = {};
         scene.updateMatrixWorld(true);
+        const previewScene=new T.Scene();
+        const previewCam=new T.OrthographicCamera(-1,1,1,-1,.1,60);
+        previewScene.add(...scene.children.filter(ob=>ob.isLight).map(ob=>ob.clone()));
+        function instrumentPreview(id){
+          const icon=new T.Group();
+          apparatus.get(id).traverseVisible(ob=>{
+            if(!ob.isMesh||ob.material.isShaderMaterial&&ob.geometry.type==='PlaneGeometry'||
+              crystals.includes(ob)||cottonTufts.includes(ob)) return;
+            const part=new T.Mesh(ob.geometry,ob.material);
+            part.matrix.copy(ob.matrixWorld);
+            part.matrixAutoUpdate=false;
+            part.renderOrder=ob.renderOrder;
+            icon.add(part);
+          });
+          previewScene.add(icon);
+          icon.updateMatrixWorld(true);
+          const bounds=new T.Box3().setFromObject(icon);
+          const center=bounds.getCenter(V(0,0,0));
+          previewCam.position.copy(center).add(id==='pipe'?V(2.2,2.3,11):V(3.2,4.3,11));
+          previewCam.lookAt(center);
+          previewCam.updateMatrixWorld();
+          let sx=0,sy=0;
+          for(const x of [bounds.min.x,bounds.max.x]) for(const y of [bounds.min.y,bounds.max.y]) for(const z of [bounds.min.z,bounds.max.z]){
+            const v=V(x,y,z).applyMatrix4(previewCam.matrixWorldInverse);
+            sx=Math.max(sx,Math.abs(v.x));sy=Math.max(sy,Math.abs(v.y));
+          }
+          const height=85,width=148,half=Math.max(sy,sx*height/width,.2)*1.09;
+          previewCam.top=half;previewCam.bottom=-half;
+          previewCam.left=-half*width/height;previewCam.right=-previewCam.left;
+          previewCam.updateProjectionMatrix();
+          renderer.setSize(width,height,false);
+          renderer.render(previewScene,previewCam);
+          previewScene.remove(icon);
+          return canvas.toDataURL('image/png');
+        }
         for(const [id] of supplies){
           const group=new T.Group();
           const members=[];
@@ -561,6 +622,15 @@
             item.append(mark,text);
             el('library').append(item);
           }
+          const preview=document.createElement('img');
+          preview.className='instrument-preview';
+          preview.alt='';
+          preview.width=148;
+          preview.height=85;
+          preview.draggable=false;
+          preview.src=instrumentPreview(id);
+          const mark=item.querySelector('[data-lucide]');
+          if(mark) mark.replaceWith(preview); else item.prepend(preview);
           const targetBtn=document.createElement('button');
           targetBtn.type='button';
           targetBtn.className='lab-target assembly-slot';
@@ -575,13 +645,24 @@
           title.textContent=name;
           targetBtn.append(number,title);
           targets.append(targetBtn);
-          item.addEventListener('click',()=>choose(chosen===id?null:id));
+          let touch=null, touchEnded=-Infinity;
+          function toggle(){choose(chosen===id?null:id);}
+          item.addEventListener('click',()=>{
+            if(performance.now()-touchEnded>380) toggle();
+          });
+          item.addEventListener('pointerup',e=>{
+            if(e.pointerType==='touch'&&performance.now()-touchEnded>380&&!item.disabled){
+              touchEnded=performance.now();
+              toggle();
+            }
+          });
           item.addEventListener('dragstart',e=>{
             if(placed.has(id)){e.preventDefault();return;}
             dragged=id;
             e.dataTransfer.effectAllowed='move';
             e.dataTransfer.setData('application/x-oxygen-instrument',id);
             e.dataTransfer.setData('text/plain',name);
+            if(preview.complete&&preview.naturalWidth) e.dataTransfer.setDragImage(preview,preview.clientWidth/2,preview.clientHeight/2);
             root.dataset.dragging=id;
             choose(id);
           });
@@ -590,6 +671,41 @@
             delete root.dataset.dragging;
             for(const b of targets.children) b.classList.remove('is-over');
           });
+          preview.addEventListener('pointerdown',e=>{
+            if(e.pointerType!=='touch'||item.disabled) return;
+            preview.setPointerCapture(e.pointerId);
+            touch={id:e.pointerId,x:e.clientX,y:e.clientY,avatar:null};
+          });
+          preview.addEventListener('pointermove',e=>{
+            if(touch?.id!==e.pointerId) return;
+            if(!touch.avatar&&Math.hypot(e.clientX-touch.x,e.clientY-touch.y)>7){
+              touch.avatar=preview.cloneNode();
+              touch.avatar.className='instrument-drag-preview';
+              document.body.append(touch.avatar);
+              root.dataset.dragging=id;
+              choose(id);
+            }
+            if(!touch.avatar) return;
+            touch.avatar.style.left=e.clientX+'px';
+            touch.avatar.style.top=e.clientY+'px';
+            const slot=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-slot]');
+            for(const b of targets.children) b.classList.toggle('is-over',b===slot&&b.dataset.slot===id);
+          });
+          function finishTouch(e,drop){
+            if(touch?.id!==e.pointerId) return;
+            if(touch.avatar){
+              touch.avatar.remove();
+              touchEnded=performance.now();
+              delete root.dataset.dragging;
+              for(const b of targets.children) b.classList.remove('is-over');
+              const slot=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-slot]')?.dataset.slot;
+              if(drop&&slot) place(slot,id);
+            }
+            touch=null;
+          }
+          preview.addEventListener('pointerup',e=>finishTouch(e,true));
+          preview.addEventListener('pointercancel',e=>finishTouch(e,false));
+          preview.addEventListener('lostpointercapture',e=>finishTouch(e,false));
           targetBtn.addEventListener('click',()=>place(id,chosen));
           targetBtn.addEventListener('dragover',e=>{
             if(!dragged) return;
@@ -678,7 +794,7 @@
         let selected=-1, phase=-1, step=0;
         const procedure = [
           ['检查气密性','检查气密性','将导管口浸入水中，用热毛巾微热空试管。导管口冒出气泡，说明装置气密性良好。',2.65],
-          ['加药和放棉花','加药和放棉花','向试管底部加入少量高锰酸钾，在试管口内侧放一团棉花。',2.4],
+          ['用纸槽装药并放棉花','用纸槽装药','横放干燥试管，把盛有少量高锰酸钾的纸槽送到管底。抬高管口使药品滑落，抽出纸槽，再在管口内侧放一团疏松棉花。',6.2],
           ['塞紧并调整试管','塞紧并调整试管','塞紧橡胶塞，使试管口略向下倾斜，并将导管口伸入水中。',1.75],
           ['点燃酒精灯','点燃酒精灯','点燃酒精灯，给装有高锰酸钾的试管加热。',1.95],
           ['排水集气','开始排水集气','待气泡连续、均匀冒出后，把导管移到装满水的倒置集气瓶口。集满后，在水下盖好玻璃片，再取出集气瓶。',13.4],
@@ -725,7 +841,10 @@
           '导管已离开水槽，防止水倒吸。',
           '酒精灯已用灯帽盖灭。',
           '把带火星的木条伸入集气瓶。',
-          '带火星的小木条复燃，检验为氧气。'
+          '带火星的小木条复燃，检验为氧气。',
+          '横放干燥试管，用纸槽把高锰酸钾送到管底。',
+          '抬高试管口，让高锰酸钾从纸槽滑落到管底。',
+          '抽出纸槽，在试管口内侧放一团疏松棉花。'
         ];
         function updateNote() {
           const part=parts[selected];
@@ -906,11 +1025,32 @@
           collectorTube.visible=outlet.visible=!useBath&&!dried;
           bathPipe.segment.visible=bathPipe.ring.visible=useBath;
           dryPipe.segment.visible=dryPipe.ring.visible=dried;
-          const tiltOffset=scope(2,1.04)?0:step===2?.073*(1-U.clamp((time-.27)/.77,0,1)):.073;
+          const ease=(from,to)=>U.smoothstep(time,from,to);
+          const loading=assembled&&step===1;
+          const insert=ease(.40,2.08), out=ease(3.50,4.50);
+          const tips=ease(2.08,2.73)-ease(4.35,5.05);
+          const tiltOffset=scope(2,1.04)?0:step===2?.096*(1-ease(.30,1.04)):.096+(loading?.205*tips:0);
           tube.quaternion.copy(tubeBase);
           if(open) tube.quaternion.premultiply(new T.Quaternion().setFromAxisAngle(zAxis,tiltOffset));
-          for(const ob of crystals) ob.visible=assembled&&scope(1,.65);
-          for(const ob of cottonTufts) ob.visible=assembled&&scope(1,1.40);
+          tube.position.z=tubeZ+(loading?.38*(ease(.06,.36)-ease(5.56,6.12)):0);
+          chute.visible=loading&&time>.32&&time<4.52;
+          chute.position.y=U.lerp(length+.84,.30,insert)+out*(length+.65);
+          payload.forEach(({grain,destination,y,z},i)=>{
+            const drop=ease(2.48+i*.008,3.03+i*.008);
+            grain.visible=chute.visible&&drop<.997;
+            if(grain.visible) {
+              grain.position.set(floorX-.051,chute.position.y+y,z).lerp(destination,drop);
+              grain.rotation.z=crystals[i].rotation.z+drop*4.3;
+            }
+            crystals[i].visible=assembled&&(step>1||loading&&drop>=.997);
+          });
+          const cottonIn=loading?ease(4.83,5.52):1;
+          cottonTufts.forEach((ob,i)=>{
+            ob.visible=assembled&&(step>1||loading&&time>4.81);
+            ob.position.copy(cottonHome[i]);
+            ob.position.y+=(1-cottonIn)*1.14;
+            ob.scale.setScalar(.08+cottonIn*.023);
+          });
           parts[0].relevant=crystals[0].visible;parts[7].relevant=cottonTufts[0].visible;
           parts[1].relevant=parts[2].relevant=parts[8].relevant=!open;
 
@@ -972,7 +1112,7 @@
           const complete=[0,1,2,3,4,7,8,9,11];
           let next=complete[step];
           if(step===0&&time>.85)next=1;
-          if(step===1&&time>1.40)next=2;
+          if(step===1&&time>.30)next=time<2.37?12:time<3.58?13:time<5.56?14:2;
           if(step===2&&time>1.04)next=3;
           if(step===3&&time>.76)next=4;
           if(step===4&&time>1.15)next=time<fillStart?5:time<capAt?6:7;

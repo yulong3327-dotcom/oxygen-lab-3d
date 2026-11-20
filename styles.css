@@ -199,6 +199,19 @@ h1 { font-size: .99rem; font-weight: 700; }
 .step-number { font-family: ui-monospace, Consolas, monospace; opacity: .8; }
 .step-detail { color: var(--muted-foreground); font-size: .76rem; line-height: 1.55; margin: 8px 0 0; }
 .step-detail:empty { display: none; }
+.instrument:has(.instrument-preview) { min-height: 46px; gap: 6px; }
+.instrument-preview {
+  display: block; width: 67px; height: 39px; flex: 0 0 auto; object-fit: contain;
+  touch-action: none; user-select: none; -webkit-user-drag: none;
+}
+.instrument-drag-preview {
+  position: fixed; pointer-events: none; width: 112px; height: 64px; z-index: 10;
+  object-fit: contain; transform: translate(-50%,-55%);
+}
+@media (max-width: 670px) {
+  .instrument:has(.instrument-preview) { min-height: 60px; flex-direction: column; gap: 1px; }
+  .instrument-preview { width: 59px; height: 34px; }
+}
 .supplies { font-size: .78rem; color: var(--muted-foreground); }
 .supplies summary { font-weight: 650; cursor: pointer; color: var(--foreground); }
 .supplies p { margin-block: 7px 0; }
