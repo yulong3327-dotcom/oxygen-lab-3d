@@ -25,7 +25,7 @@
     <div class="editor-toolbar">
       <ol class="steps" aria-label="实验步骤">
         <li data-lab="assembly-step" aria-current="step"><i class="icon" data-lucide="blocks" aria-hidden="true"></i><span>仪器组装</span></li>
-        <li data-lab="demo-step"><i class="icon" data-lucide="flask-conical" aria-hidden="true"></i><span>制氧演示</span></li>
+        <li data-lab="demo-step"><i class="icon" data-lucide="flask-conical" aria-hidden="true"></i><span>实验操作</span></li>
       </ol>
           <div class="viz-row lab-tools" role="group" aria-label="模型视角">
             <button class="btn btn-ghost icon-btn" type="button" aria-label="旋转模型" title="旋转模型" data-lab="orbit" disabled><i class="icon" data-lucide="rotate-cw" aria-hidden="true"></i></button>
@@ -33,8 +33,8 @@
             <button class="btn btn-ghost icon-btn" type="button" aria-label="缩小" title="缩小" data-lab="zoom-out" disabled><i class="icon" data-lucide="zoom-out" aria-hidden="true"></i></button>
             <button class="btn btn-ghost icon-btn" type="button" aria-label="恢复初始视角" title="恢复初始视角" data-lab="home" disabled><i class="icon" data-lucide="maximize" aria-hidden="true"></i></button>
           </div>
-          <button class="btn btn-primary play" type="button" data-lab="play" disabled>
-            <span data-lab="play-icon" aria-hidden="true"><i class="icon" data-lucide="play" aria-hidden="true"></i></span><span data-lab="pause-icon" aria-hidden="true" hidden><i class="icon" data-lucide="pause" aria-hidden="true"></i></span><span data-lab="play-text">开始演示</span>
+          <button class="btn btn-ghost play" type="button" data-lab="play" disabled hidden>
+            <i class="icon" data-lucide="rotate-ccw" aria-hidden="true"></i><span data-lab="play-text">重做实验</span>
           </button>
     </div>
     <div class="workbench">
@@ -66,6 +66,7 @@
           <svg class="lab-overlay lab-lines" data-lab="lines" aria-hidden="true"></svg>
           <div class="lab-overlay" data-lab="pins"></div>
           <div class="lab-overlay" data-lab="targets"></div>
+          <div class="lab-overlay lab-interactions" data-lab="interactions" hidden></div>
           <p class="lab-fallback text-muted" role="status" data-lab="fallback">正在加载 3D 模型…</p>
         </div>
       </section>
