@@ -526,7 +526,7 @@
           return {name,xyz:V(...xyz),offset,tint,detail,index,btn,leader,point};
         });
         const placed=new Set();
-        let chosen=null, dragged=null, assembled=false;
+        let chosen=null, assembled=false, drag=null, loose=null, lastPointerAction=-Infinity;
         const supplies = [
           ['stand','铁架台','pipette',[-4.12,3.31,-1.03],[-22,-14]],
           ['tube','试管','test-tube-diagonal',[-2.82,2.58,.32],[3,-24]],
@@ -645,85 +645,107 @@
           title.textContent=name;
           targetBtn.append(number,title);
           targets.append(targetBtn);
-          let touch=null, touchEnded=-Infinity;
-          function toggle(){choose(chosen===id?null:id);}
-          item.addEventListener('click',()=>{
-            if(performance.now()-touchEnded>380) toggle();
+          const bounds=new T.Box3().setFromObject(ghost.get(id));
+          const slot={id,name,item,preview,btn:targetBtn,xyz:V(...xyz),offset,bounds};
+          item.addEventListener('dragstart',e=>e.preventDefault());
+          item.addEventListener('pointerdown',e=>startDrag(e,slot,false));
+          item.addEventListener('click',e=>{
+            if(e.detail===0||performance.now()-lastPointerAction>400) choose(chosen===id?null:id);
           });
-          item.addEventListener('pointerup',e=>{
-            if(e.pointerType==='touch'&&performance.now()-touchEnded>380&&!item.disabled){
-              touchEnded=performance.now();
-              toggle();
-            }
-          });
-          item.addEventListener('dragstart',e=>{
-            if(placed.has(id)){e.preventDefault();return;}
-            dragged=id;
-            e.dataTransfer.effectAllowed='move';
-            e.dataTransfer.setData('application/x-oxygen-instrument',id);
-            e.dataTransfer.setData('text/plain',name);
-            if(preview.complete&&preview.naturalWidth) e.dataTransfer.setDragImage(preview,preview.clientWidth/2,preview.clientHeight/2);
-            root.dataset.dragging=id;
-            choose(id);
-          });
-          item.addEventListener('dragend',()=>{
-            dragged=null;
-            delete root.dataset.dragging;
-            for(const b of targets.children) b.classList.remove('is-over');
-          });
-          preview.addEventListener('pointerdown',e=>{
-            if(e.pointerType!=='touch'||item.disabled) return;
-            preview.setPointerCapture(e.pointerId);
-            touch={id:e.pointerId,x:e.clientX,y:e.clientY,avatar:null};
-          });
-          preview.addEventListener('pointermove',e=>{
-            if(touch?.id!==e.pointerId) return;
-            if(!touch.avatar&&Math.hypot(e.clientX-touch.x,e.clientY-touch.y)>7){
-              touch.avatar=preview.cloneNode();
-              touch.avatar.className='instrument-drag-preview';
-              document.body.append(touch.avatar);
-              root.dataset.dragging=id;
-              choose(id);
-            }
-            if(!touch.avatar) return;
-            touch.avatar.style.left=e.clientX+'px';
-            touch.avatar.style.top=e.clientY+'px';
-            const slot=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-slot]');
-            for(const b of targets.children) b.classList.toggle('is-over',b===slot&&b.dataset.slot===id);
-          });
-          function finishTouch(e,drop){
-            if(touch?.id!==e.pointerId) return;
-            if(touch.avatar){
-              touch.avatar.remove();
-              touchEnded=performance.now();
-              delete root.dataset.dragging;
-              for(const b of targets.children) b.classList.remove('is-over');
-              const slot=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-slot]')?.dataset.slot;
-              if(drop&&slot) place(slot,id);
-            }
-            touch=null;
-          }
-          preview.addEventListener('pointerup',e=>finishTouch(e,true));
-          preview.addEventListener('pointercancel',e=>finishTouch(e,false));
-          preview.addEventListener('lostpointercapture',e=>finishTouch(e,false));
           targetBtn.addEventListener('click',()=>place(id,chosen));
-          targetBtn.addEventListener('dragover',e=>{
-            if(!dragged) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect=dragged===id?'move':'none';
-            targetBtn.classList.toggle('is-over',dragged===id);
-          });
-          targetBtn.addEventListener('dragleave',()=>targetBtn.classList.remove('is-over'));
-          targetBtn.addEventListener('drop',e=>{
-            e.preventDefault();
-            targetBtn.classList.remove('is-over');
-            if(dragged && e.dataTransfer.getData('application/x-oxygen-instrument')===dragged) place(id,dragged);
-          });
-          return {id,name,item,btn:targetBtn,xyz:V(...xyz),offset};
+          return slot;
         });
         window.lucide?.createIcons();
+        const nextInstrument=()=>slotList.find(slot=>!placed.has(slot.id));
+        function startDrag(e,slot,fromStage){
+          if(drag||slot.item.disabled||e.button!==0) return;
+          e.preventDefault();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          const r=stage.getBoundingClientRect();
+          const [ax,ay]=fromStage?coords(slot.xyz.clone().add(loose.delta)):[e.clientX-r.left,e.clientY-r.top];
+          drag={id:e.pointerId,slot,fromStage,avatar:null,x:e.clientX,y:e.clientY,
+            gripX:ax-(e.clientX-r.left),gripY:ay-(e.clientY-r.top),original:loose,hit:false,inside:false};
+        }
+        function projectedBox(slot,delta){
+          const {min,max}=slot.bounds;
+          let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
+          for(const x of [min.x,max.x]) for(const y of [min.y,max.y]) for(const z of [min.z,max.z]){
+            const [a,b]=coords(V(x,y,z).add(delta));
+            left=Math.min(left,a);top=Math.min(top,b);right=Math.max(right,a);bottom=Math.max(bottom,b);
+          }
+          return {left,top,right,bottom};
+        }
+        function moveDrag(e){
+          if(drag?.id!==e.pointerId) return;
+          if(!drag.avatar){
+            if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<5) return;
+            drag.avatar=drag.slot.preview.cloneNode();
+            drag.avatar.className='instrument-drag-preview';
+            document.body.append(drag.avatar);
+            root.dataset.dragging=drag.slot.id;
+            choose(drag.slot.id);
+          }
+          const slot=drag.slot, r=stage.getBoundingClientRect();
+          const x=e.clientX-r.left,y=e.clientY-r.top;
+          drag.inside=x>=0&&y>=0&&x<=width&&y<=height;
+          drag.avatar.hidden=drag.inside;
+          drag.avatar.style.left=e.clientX+'px';drag.avatar.style.top=e.clientY+'px';
+          drag.hit=false;
+          if(drag.inside){
+            const [sx,sy]=coords(slot.xyz);
+            const dropSlot=slot.btn.getBoundingClientRect();
+            const tx=dropSlot.left+dropSlot.width/2-r.left,ty=dropSlot.top+dropSlot.height/2-r.top;
+            const ax=x+drag.gripX,ay=y+drag.gripY;
+            const radius=e.pointerType==='touch'?35:34;
+            drag.hit=Math.min(Math.hypot(ax-sx,ay-sy),Math.hypot(x-tx,y-ty))<=radius;
+            let delta=V(0,0,0);
+            if(!drag.hit){
+              const b=projectedBox(slot,delta);
+              const fit=(v,min,max)=>(min<=max?U.clamp(v,min,max):(min+max)/2);
+              const cx=fit(ax,sx-b.left+9,width-(b.right-sx)-9);
+              const cy=fit(ay,sy-b.top+9,height-(b.bottom-sy)-9);
+              const depth=slot.xyz.clone().project(camera).z;
+              delta=V(2*cx/width-1,1-2*cy/height,depth).unproject(camera).sub(slot.xyz);
+            }
+            loose={slot,delta};
+          } else {
+            loose=null;
+            apparatus.get(slot.id).position.set(0,0,0);
+            apparatus.get(slot.id).visible=false;
+          }
+          slot.btn.classList.toggle('is-over',drag.hit);
+          request();
+        }
+        function endDrag(e,dropped){
+          if(drag?.id!==e.pointerId) return;
+          if(drag.avatar&&dropped) moveDrag(e);
+          const held=drag;
+          drag=null;
+          lastPointerAction=performance.now();
+          held.avatar?.remove();
+          delete root.dataset.dragging;
+          held.slot.btn.classList.remove('is-over');
+          if(!held.avatar){
+            if(dropped&&!held.fromStage) choose(chosen===held.slot.id?null:held.slot.id);
+            return;
+          }
+          if(dropped&&held.hit) place(held.slot.id,held.slot.id);
+          else if(!dropped||!held.inside) {
+            loose=held.original;
+            if(!loose) {
+              const group=apparatus.get(held.slot.id);
+              group.position.set(0,0,0);
+              group.visible=false;
+            }
+          }
+          request();
+        }
+        document.addEventListener('pointermove',moveDrag);
+        document.addEventListener('pointerup',e=>endDrag(e,true));
+        document.addEventListener('pointercancel',e=>endDrag(e,false));
         function updateAssembly() {
-          assembled=placed.size===supplies.length;
+          const next=nextInstrument();
+          assembled=!next;
           root.dataset.mode=assembled?'demo':'assembly';
           root.dataset.active=chosen||'';
           const a=el('assembly-step'), b=el('demo-step')||el('experiment-step');
@@ -736,14 +758,16 @@
           if(!assembled) el('play-text').textContent='组装后开始演示';
           for(const {id,btn,item} of slotList){
             const inPlace=placed.has(id);
-            item.disabled=inPlace;
-            item.draggable=!inPlace;
+            const current=id===next?.id;
+            item.disabled=!current;
+            item.draggable=false;
             item.toggleAttribute('data-placed',inPlace);
+            item.toggleAttribute('data-current',current);
             item.setAttribute('aria-pressed',String(id===chosen));
             apparatus.get(id).visible=inPlace;
-            ghost.get(id).visible=!inPlace;
+            ghost.get(id).visible=current;
             for(const obj of guideMeshes[id]) obj.material=id===chosen?hotGuideMat:guideMat;
-            btn.hidden=inPlace;
+            btn.hidden=!current;
             btn.classList.toggle('is-target',id===chosen);
           }
           el('pins').hidden=!assembled;
@@ -756,18 +780,19 @@
           el('note-text').textContent=message;
         }
         function choose(id){
-          if(assembled||placed.has(id)) return;
+          if(assembled||id!==null&&id!==nextInstrument()?.id) return;
           chosen=id;
           updateAssembly();
-          assemblyNote(id?'已选：'+slotList.find(s=>s.id===id).name+'。':'准备组装');
+          assemblyNote((id?'已选：':'当前：')+nextInstrument().name+'。');
         }
         function place(id, picked){
-          if(assembled||placed.has(id)) return;
+          if(assembled||id!==nextInstrument()?.id) return;
           if(!picked){assemblyNote('请先选中仪器库里的仪器。');return;}
           if(picked!==id){assemblyNote('这里放置'+slotList.find(s=>s.id===id).name+'。','heat');return;}
           placed.add(id);
           chosen=null;
-          dragged=null;
+          loose=null;
+          apparatus.get(id).position.set(0,0,0);
           delete root.dataset.dragging;
           updateAssembly();
           if(assembled){
@@ -775,20 +800,22 @@
             assemblyNote('仪器已装齐。先检查装置气密性。','oxygen');
             if(document.activeElement===slotList.find(s=>s.id===id).btn) el('play').focus();
           } else {
-            assemblyNote(slotList.find(s=>s.id===id).name+'已就位。','oxygen');
-            const next=slotList.find(s=>!placed.has(s.id));
+            const next=nextInstrument();
+            assemblyNote(slotList.find(s=>s.id===id).name+'已就位。下一件：'+next.name+'。','oxygen');
             if(document.activeElement===slotList.find(s=>s.id===id).btn) next?.item.focus();
           }
         }
         el('reset-assembly').addEventListener('click',()=>{
-          placed.clear(); chosen=null; dragged=null;
+          placed.clear(); chosen=null;
+          drag?.avatar?.remove(); drag=null; loose=null;
+          apparatus.forEach(group=>group.position.set(0,0,0));
           delete root.dataset.dragging;
           time=0; step=0; playing=false; phase=-1; selected=-1;
           for(const p of parts) p.btn.setAttribute('aria-pressed','false');
           resetView();
           release();
           updateAssembly();
-          assemblyNote('准备组装');
+          assemblyNote('当前：'+nextInstrument().name+'。');
         });
 
         let selected=-1, phase=-1, step=0;
@@ -915,7 +942,7 @@
         function layoutTargets(){
           const rects=[];
           for(const {btn,xyz,offset,id} of slotList){
-            if(placed.has(id)) continue;
+            if(btn.hidden) continue;
             const [x,y]=coords(xyz);
             const w=btn.offsetWidth,h=btn.offsetHeight;
             const tx=x+offset[0]-w/2, ty=y+offset[1]-h/2;
@@ -952,6 +979,14 @@
         const distance=()=>{const [a,b]=fingers.values();return Math.hypot(a.x-b.x,a.y-b.y);};
         canvas.addEventListener('pointerdown',e=>{
           if(e.button!==0&&e.pointerType==='mouse') return;
+          if(loose&&!drag){
+            const r=stage.getBoundingClientRect(), x=e.clientX-r.left,y=e.clientY-r.top;
+            const b=projectedBox(loose.slot,loose.delta);
+            if(x>=b.left&&x<=b.right&&y>=b.top&&y<=b.bottom){
+              startDrag(e,loose.slot,true);
+              return;
+            }
+          }
           canvas.setPointerCapture(e.pointerId);
           fingers.set(e.pointerId,{x:e.clientX,y:e.clientY});
         });
@@ -1133,6 +1168,11 @@
           }
           positionCamera();
           model();
+          if(loose){
+            const group=apparatus.get(loose.slot.id);
+            group.position.copy(loose.delta);
+            group.visible=true;
+          }
           renderer.render(scene,camera);
           if(assembled) layoutPins(); else layoutTargets();
           if(playing) request();
@@ -1141,6 +1181,7 @@
         phase=0;
         for(const name of ['orbit','zoom-in','zoom-out','home']) el(name).disabled=false;
         updateAssembly();
+        assemblyNote('当前：'+nextInstrument().name+'。');
         el('fallback').hidden=true;
       }
     })();
