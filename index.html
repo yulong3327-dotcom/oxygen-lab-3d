@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e9e8f4">
+  <meta name="description" content="组装高锰酸钾制氧气装置，观察氧气如何沿导管进入集气瓶。">
+  <title>高锰酸钾制氧气 · 化学实验室</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./vendor/three.min.js" defer></script>
+  <script src="./vendor/lucide.min.js" defer></script>
+  <script src="./lab.js" defer></script>
+</head>
+<body>
+  <main id="oxygen-lab-3d" class="editor" aria-labelledby="oxygen-lab-title">
+    <header class="editor-titlebar">
+      <div class="site-brand">
+        <span class="brand-mark"><i class="icon" data-lucide="flask-conical" aria-hidden="true"></i></span>
+        <span class="brand-name">化学实验室</span>
+      </div>
+      <span class="title-divider" aria-hidden="true"></span>
+      <h1 id="oxygen-lab-title">高锰酸钾制氧气</h1>
+    </header>
+    <div class="editor-toolbar">
+      <ol class="steps" aria-label="实验步骤">
+        <li data-lab="assembly-step" aria-current="step"><i class="icon" data-lucide="blocks" aria-hidden="true"></i><span>仪器组装</span></li>
+        <li data-lab="demo-step"><i class="icon" data-lucide="flask-conical" aria-hidden="true"></i><span>制氧演示</span></li>
+      </ol>
+          <div class="viz-row lab-tools" role="group" aria-label="模型视角">
+            <button class="btn btn-ghost icon-btn" type="button" aria-label="旋转模型" title="旋转模型" data-lab="orbit" disabled><i class="icon" data-lucide="rotate-cw" aria-hidden="true"></i></button>
+            <button class="btn btn-ghost icon-btn" type="button" aria-label="放大" title="放大" data-lab="zoom-in" disabled><i class="icon" data-lucide="zoom-in" aria-hidden="true"></i></button>
+            <button class="btn btn-ghost icon-btn" type="button" aria-label="缩小" title="缩小" data-lab="zoom-out" disabled><i class="icon" data-lucide="zoom-out" aria-hidden="true"></i></button>
+            <button class="btn btn-ghost icon-btn" type="button" aria-label="恢复初始视角" title="恢复初始视角" data-lab="home" disabled><i class="icon" data-lucide="maximize" aria-hidden="true"></i></button>
+          </div>
+          <button class="btn btn-primary play" type="button" data-lab="play" disabled>
+            <span data-lab="play-icon" aria-hidden="true"><i class="icon" data-lucide="play" aria-hidden="true"></i></span><span data-lab="pause-icon" aria-hidden="true" hidden><i class="icon" data-lucide="pause" aria-hidden="true"></i></span><span data-lab="play-text">开始演示</span>
+          </button>
+    </div>
+    <div class="workbench">
+      <aside class="toolbox" data-lab="toolbox" aria-labelledby="library-title">
+        <div class="toolbox-heading">
+          <div class="panel-title"><i class="icon" data-lucide="layers-2" aria-hidden="true"></i><h2 id="library-title">仪器库</h2></div>
+          <output data-lab="assembly-count" aria-label="已组装的仪器数量"></output>
+        </div>
+        <div class="instrument-grid" data-lab="library" role="group" aria-label="可选仪器">
+          <button class="instrument" data-instrument="stand" type="button" draggable="true" aria-pressed="false"><i class="icon" data-lucide="lamp" aria-hidden="true"></i><span>铁架台</span></button>
+          <button class="instrument" data-instrument="tube" type="button" draggable="true" aria-pressed="false"><i class="icon" data-lucide="test-tube-diagonal" aria-hidden="true"></i><span>试管</span></button>
+          <button class="instrument" data-instrument="lamp" type="button" draggable="true" aria-pressed="false"><i class="icon" data-lucide="flame" aria-hidden="true"></i><span>酒精灯</span></button>
+          <button class="instrument" data-instrument="pipe" type="button" draggable="true" aria-pressed="false"><i class="icon" data-lucide="route" aria-hidden="true"></i><span>带塞导管</span></button>
+          <button class="instrument" data-instrument="tank" type="button" draggable="true" aria-pressed="false"><i class="icon" data-lucide="waves" aria-hidden="true"></i><span>水槽</span></button>
+          <button class="instrument" data-instrument="jar" type="button" draggable="true" aria-pressed="false"><i class="icon" data-lucide="cylinder" aria-hidden="true"></i><span>集气瓶</span></button>
+        </div>
+        <div class="toolbox-footer">
+          <button class="btn btn-ghost reset-assembly" type="button" data-lab="reset-assembly" disabled>
+            <i class="icon" data-lucide="rotate-ccw" aria-hidden="true"></i> 重新组装
+          </button>
+        </div>
+      </aside>
+      <section class="station" aria-labelledby="station-title">
+        <div class="station-bar">
+          <div class="panel-title"><i class="icon" data-lucide="box" aria-hidden="true"></i><h2 id="station-title">实验台</h2></div>
+        </div>
+        <div class="lab-stage" data-lab="stage">
+          <canvas class="lab-canvas" data-lab="canvas" role="img" aria-label="高锰酸钾制氧气实验台"></canvas>
+          <svg class="lab-overlay lab-lines" data-lab="lines" aria-hidden="true"></svg>
+          <div class="lab-overlay" data-lab="pins"></div>
+          <div class="lab-overlay" data-lab="targets"></div>
+          <p class="lab-fallback text-muted" role="status" data-lab="fallback">正在加载 3D 模型…</p>
+        </div>
+      </section>
+      <aside class="inspector" aria-labelledby="inspector-title">
+        <div class="inspector-heading panel-title"><i class="icon" data-lucide="panel-right" aria-hidden="true"></i><h2 id="inspector-title">实验信息</h2></div>
+        <section class="inspector-section" aria-labelledby="observation-title">
+          <h3 id="observation-title">当前状态</h3>
+          <div class="lab-note" data-lab="note" role="status" aria-live="polite">
+            <span class="lab-dot" aria-hidden="true"></span>
+            <span data-lab="note-text">准备组装</span>
+          </div>
+        </section>
+        <section class="inspector-section" aria-labelledby="procedure-title">
+          <h3 id="procedure-title">实验步骤</h3>
+          <ol class="procedure" data-lab="procedure"></ol>
+          <p class="step-detail" data-lab="step-detail"></p>
+        </section>
+        <section class="inspector-section" aria-labelledby="reaction-title">
+          <h3 id="reaction-title">反应式</h3>
+          <div class="reaction" aria-label="两个高锰酸钾受热生成锰酸钾、二氧化锰和氧气">
+            <div class="reaction-feedback">
+              <span>2KMnO<sub>4</sub></span>
+              <span class="reaction-arrow" aria-hidden="true"><small>加热</small><b>⟶</b></span>
+            </div>
+            <span>K<sub>2</sub>MnO<sub>4</sub> + MnO<sub>2</sub> + O<sub>2</sub>↑</span>
+          </div>
+        </section>
+        <section class="inspector-section" aria-labelledby="method-title">
+          <h3 id="method-title">实验方法</h3>
+          <dl class="method">
+            <div><dt>制取</dt><dd>加热分解</dd></div>
+            <div><dt>收集</dt><dd>排水法</dd></div>
+          </dl>
+        </section>
+        <details class="inspector-section supplies">
+          <summary>实验用品</summary>
+          <p>酒精灯、火柴、升降台、铁架台、铁夹、药匙、热毛巾、纸槽、玻璃片、大试管、集气瓶、导管、橡胶管、水槽、棉花、小木条。</p>
+          <p>药品：高锰酸钾。</p>
+        </details>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>
