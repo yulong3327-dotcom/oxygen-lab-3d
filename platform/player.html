@@ -6,7 +6,8 @@
   <meta name="theme-color" content="#edf2f4">
   <title>实验台 · 化学实验室</title>
   <link rel="icon" href="../favicon.svg">
-  <link rel="stylesheet" href="./platform.css">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="./player.css">
   <script src="../vendor/lucide.min.js" defer></script>
   <script type="importmap">
     { "imports": { "three": "../vendor/three-r160/three.module.min.js" } }
@@ -14,38 +15,74 @@
   <script type="module" src="./player.js"></script>
 </head>
 <body class="player-shell">
-  <header class="topbar">
-    <a class="brand" href="./" aria-label="返回化学实验室目录"><span class="brand-icon"><i data-lucide="flask-conical" aria-hidden="true"></i></span><span>化学实验室</span></a>
-    <span class="topbar-divider" aria-hidden="true"></span>
+<main id="player" class="editor">
+  <header class="editor-titlebar">
+    <a class="site-brand" href="./" aria-label="返回化学实验室目录"><span class="brand-mark"><i class="icon" data-lucide="flask-conical" aria-hidden="true"></i></span><span class="brand-name">化学实验室</span></a>
+    <span class="title-divider" aria-hidden="true"></span>
     <h1 id="experiment-title">实验台</h1>
   </header>
-  <main id="player" class="player">
-    <section class="stage" aria-label="3D 实验台">
-      <canvas id="scene" aria-label="仪器模型与实验台"></canvas>
-      <div class="scene-tools" role="group" aria-label="模型视角">
-        <button id="turn-view" class="icon-button" type="button" aria-label="旋转视角" title="旋转视角" disabled><i data-lucide="rotate-cw" aria-hidden="true"></i></button>
-        <button id="zoom-in" class="icon-button" type="button" aria-label="放大" title="放大" disabled><i data-lucide="zoom-in" aria-hidden="true"></i></button>
-        <button id="zoom-out" class="icon-button" type="button" aria-label="缩小" title="缩小" disabled><i data-lucide="zoom-out" aria-hidden="true"></i></button>
-        <button id="reset-view" class="icon-button" type="button" aria-label="恢复视角" title="恢复视角" disabled><i data-lucide="maximize" aria-hidden="true"></i></button>
+  <div class="editor-toolbar">
+    <ol id="phase-list" class="steps" aria-label="实验阶段" hidden>
+      <li id="assembly-phase" aria-current="step"><i class="icon" data-lucide="blocks" aria-hidden="true"></i>仪器组装</li>
+      <li id="procedure-phase"><i class="icon" data-lucide="flask-conical" aria-hidden="true"></i>实验操作</li>
+    </ol>
+    <span id="practice-label">操作练习</span>
+    <div class="lab-tools" role="group" aria-label="模型视角">
+      <button id="turn-view" class="btn btn-ghost icon-btn" type="button" aria-label="旋转视角" title="旋转视角" disabled><i class="icon" data-lucide="rotate-cw" aria-hidden="true"></i></button>
+      <button id="zoom-in" class="btn btn-ghost icon-btn" type="button" aria-label="放大" title="放大" disabled><i class="icon" data-lucide="zoom-in" aria-hidden="true"></i></button>
+      <button id="zoom-out" class="btn btn-ghost icon-btn" type="button" aria-label="缩小" title="缩小" disabled><i class="icon" data-lucide="zoom-out" aria-hidden="true"></i></button>
+      <button id="reset-view" class="btn btn-ghost icon-btn" type="button" aria-label="恢复视角" title="恢复视角" disabled><i class="icon" data-lucide="maximize" aria-hidden="true"></i></button>
+    </div>
+    <button id="reset-experiment" class="btn btn-ghost play" type="button" disabled hidden><i class="icon" data-lucide="rotate-ccw" aria-hidden="true"></i>重做实验</button>
+  </div>
+  <div class="workbench">
+    <aside class="toolbox" aria-labelledby="instrument-title">
+      <div class="toolbox-heading">
+        <div class="panel-title"><i class="icon" data-lucide="layers-2" aria-hidden="true"></i><h2 id="instrument-title">仪器库</h2></div>
+        <output id="assembly-count" aria-label="已组装的仪器数量"></output>
       </div>
-      <p id="load-status" class="load-status" role="status">正在加载 3D 模型…</p>
-      <button id="target" class="scene-target" type="button" aria-label="放到目标位置" title="放到目标位置" hidden><i data-lucide="locate-fixed" aria-hidden="true"></i></button>
-      <div id="instruments" class="instruments" role="group" aria-label="可选仪器"></div>
-    </section>
-    <aside class="inspector" aria-labelledby="steps-title">
-      <p id="experiment-summary" class="experiment-summary"></p>
-      <div class="inspector-heading">
-        <h2 id="steps-title">实验步骤</h2>
-        <output id="progress" aria-label="实验进度"></output>
-      </div>
-      <ol id="step-list" class="step-list"></ol>
-      <p id="instruction" class="instruction" aria-live="polite"></p>
-      <p id="feedback" class="feedback" role="status" hidden></p>
-      <div class="experiment-actions">
-        <button id="demonstrate" type="button" disabled><i data-lucide="play" aria-hidden="true"></i>演示当前步骤</button>
-        <button id="reset-experiment" type="button" disabled><i data-lucide="rotate-ccw" aria-hidden="true"></i>重做</button>
+      <div id="instruments" class="instrument-grid" role="group" aria-label="可选仪器"></div>
+      <div id="assembly-tools" class="toolbox-footer" hidden>
+        <button id="reset-assembly" class="btn btn-ghost reset-assembly" type="button" disabled><i class="icon" data-lucide="rotate-ccw" aria-hidden="true"></i>重新组装</button>
       </div>
     </aside>
-  </main>
+    <section class="station" aria-labelledby="station-title">
+      <div class="station-bar">
+        <div class="panel-title"><i class="icon" data-lucide="box" aria-hidden="true"></i><h2 id="station-title">实验台</h2></div>
+        <button id="recover-markers" class="btn btn-ghost" type="button" hidden><i class="icon" data-lucide="maximize" aria-hidden="true"></i>恢复落点视野</button>
+      </div>
+      <div id="bench-guide" class="bench-guide" hidden>
+        <div id="step-hint"><span id="hint-title" class="lab-action-step"></span><span id="hint-text"></span></div>
+        <p id="bench-feedback" aria-hidden="true" hidden></p>
+      </div>
+      <div class="lab-stage">
+        <canvas id="scene" class="lab-canvas" role="img" aria-label="仪器模型与实验台"></canvas>
+        <p id="load-status" class="lab-fallback text-muted" role="status">正在加载 3D 模型…</p>
+        <div id="assembly-overlay" class="lab-overlay"></div>
+        <div id="procedure-overlay" class="lab-overlay lab-interactions" hidden></div>
+        <div id="circuit-overlay" class="lab-overlay" hidden></div>
+        <div id="part-overlay" class="lab-overlay" hidden></div>
+        <button id="target" class="lab-target" type="button" aria-label="放到目标位置" title="放到目标位置" hidden><i class="icon" data-lucide="locate-fixed" aria-hidden="true"></i></button>
+      </div>
+      <div id="circuit-controls" hidden></div>
+    </section>
+    <aside class="inspector" aria-labelledby="inspector-title">
+      <div class="inspector-heading panel-title"><i class="icon" data-lucide="panel-right" aria-hidden="true"></i><h2 id="inspector-title">实验信息</h2></div>
+      <section class="inspector-section">
+        <h3>当前状态</h3>
+        <div class="lab-note"><span class="lab-dot" aria-hidden="true"></span><span id="feedback" role="status"></span></div>
+      </section>
+      <section class="inspector-section">
+        <div class="procedure-heading"><h3 id="steps-title">实验步骤</h3><output id="progress" aria-label="实验进度"></output></div>
+        <ol id="step-list" class="procedure"></ol>
+        <p id="instruction" class="step-detail" tabindex="-1"></p>
+        <button id="demonstrate" class="btn btn-ghost" type="button" disabled hidden><i class="icon" data-lucide="play" aria-hidden="true"></i>演示当前步骤</button>
+      </section>
+      <section id="reaction-section" class="inspector-section" hidden><h3>反应式</h3><p id="experiment-equation" class="reaction"></p></section>
+      <section id="circuit-data" class="inspector-section" hidden></section>
+      <section class="inspector-section"><h3>实验目的</h3><p id="experiment-summary" class="step-detail"></p><p id="experiment-note" class="step-detail" hidden></p></section>
+    </aside>
+  </div>
+</main>
 </body>
 </html>

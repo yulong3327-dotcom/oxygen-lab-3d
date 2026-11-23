@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "id": "current-voltage",
+  "title": "探究电流与电压的关系",
+  "summary": "保持定值电阻不变，移动滑动变阻器的滑片，测量定值电阻两端的电压和流过它的电流。",
+  "note": "仿真采用 6 V 理想直流电源、10 Ω 定值电阻和 0–50 Ω 滑动变阻器。忽略导线、电表和电源内阻的非理想影响。",
+  "conclusion": "电阻一定时，通过导体的电流与它两端的电压成正比。观察 I–U 图，并比较各组的 U/I。",
+  "view": { "theta": 0.12, "phi": 0.59, "zoom": 0.80 },
+  "instruments": [
+    { "id": "power", "assetId": "dc-power-supply", "assetVersion": 1, "label": "直流电源", "position": [-0.25, 0, -0.215] },
+    { "id": "switch", "assetId": "knife-switch", "assetVersion": 1, "label": "开关", "position": [0.245, 0, -0.22] },
+    { "id": "ammeter", "assetId": "analog-ammeter", "assetVersion": 2, "label": "电流表", "position": [0.25, 0, 0.125] },
+    { "id": "resistor", "assetId": "fixed-resistor", "assetVersion": 1, "label": "定值电阻", "position": [0, 0, 0.125] },
+    { "id": "voltmeter", "assetId": "analog-voltmeter", "assetVersion": 2, "label": "电压表", "position": [0, 0, -0.075] },
+    { "id": "rheostat", "assetId": "sliding-rheostat", "assetVersion": 1, "label": "滑动变阻器", "position": [-0.25, 0, 0.125] }
+  ],
+  "assembly": [
+    { "instrumentId": "power", "area": [0.033, 0.027], "hint": "把直流电源放在台面左后方。" },
+    { "instrumentId": "switch", "area": [0.033, 0.027], "hint": "把开关放在台面右后方。接线时保持断开。" },
+    { "instrumentId": "ammeter", "area": [0.033, 0.027], "hint": "把电流表放在台面右前方。" },
+    { "instrumentId": "resistor", "area": [0.033, 0.027], "hint": "把 10 Ω 定值电阻放在台面前方中央。" },
+    { "instrumentId": "voltmeter", "area": [0.033, 0.027], "hint": "把电压表放在定值电阻的后方。" },
+    { "instrumentId": "rheostat", "area": [0.033, 0.027], "hint": "把滑动变阻器放在台面左前方。" }
+  ],
+  "steps": [
+    {
+      "id": "wire", "title": "连接电路",
+      "instruction": "开关断开。把电流表、定值电阻、滑动变阻器和开关串联到电源；电压表并联在定值电阻两端。变阻器接一上一下。",
+      "observable": "主回路和测量支路接线正确。",
+      "wrongFeedback": "检查主回路、两表的接线与滑动变阻器的接线柱。",
+      "action": { "type": "circuit-wire" }
+    },
+    {
+      "id": "prepare", "title": "把变阻器调到最大",
+      "instruction": "把滑片移到离已接下接线柱最远的一端，让接入电路的电阻最大。",
+      "observable": "滑动变阻器接入最大阻值 50 Ω。",
+      "wrongFeedback": "请把滑片移到离已接下接线柱最远的一端。",
+      "action": { "type": "circuit-prepare" }
+    },
+    {
+      "id": "close", "title": "闭合开关",
+      "instruction": "闭合开关，观察两块表的指针。",
+      "observable": "电流表和电压表指针偏转。",
+      "wrongFeedback": "确认变阻器接入阻值最大后再闭合开关。",
+      "action": { "type": "circuit-close" }
+    },
+    {
+      "id": "measure", "title": "测量三组 U、I",
+      "instruction": "读两表并记录一组数据。移动滑片改变电压，共记录三组不同的 U、I。定值电阻保持 10 Ω。",
+      "observable": "三组测量点已画在 I–U 图上。",
+      "wrongFeedback": "请移动滑片，使这次电压和已记录的数据有明显差别。",
+      "action": { "type": "circuit-measure" }
+    },
+    {
+      "id": "open", "title": "断开开关",
+      "instruction": "测量结束，断开开关。比较各组 U/I，并观察 I–U 图。",
+      "observable": "两块表归零；数据和图像保留，供比较。",
+      "wrongFeedback": "请断开开关，结束测量。",
+      "action": { "type": "circuit-open" }
+    }
+  ],
+  "sandboxInstruments": [
+    {"id":"battery-single","label":"单节电池座","category":"电源","assetId":"battery-single","assetVersion":1,"ports":{"p":"+","n":"−"}},
+    {"id":"battery-pack","label":"双节电池组","category":"电源","assetId":"battery-pack","assetVersion":1,"ports":{"p":"+","n":"−"}},
+    {"id":"switch-spdt","label":"单刀双掷开关","category":"开关与调节","assetId":"switch-spdt","assetVersion":1,"ports":{"p":"公共","n":"左","b":"右"},"part":{"node":"SwitchLever"}},
+    {"id":"lamp-bulb","label":"小灯泡","category":"用电器","assetId":"lamp-bulb","assetVersion":1,"ports":{"p":"+","n":"−"},"part":{"glow":"LampGlow"}},
+    {"id":"led","label":"发光二极管","category":"用电器","assetId":"led","assetVersion":1,"ports":{"p":"+","n":"−"},"part":{"glow":"LampGlow"}},
+    {"id":"solenoid","label":"通电螺线管","category":"用电器","assetId":"solenoid","assetVersion":1,"ports":{"p":"+","n":"−"}},
+    {"id":"bell","label":"电铃","category":"用电器","assetId":"bell","assetVersion":1,"ports":{"p":"+","n":"−"},"part":{"actuator":"BellHammer","axis":[1,0,0]}},
+    {"id":"buzzer","label":"两脚蜂鸣器","category":"用电器","assetId":"buzzer","assetVersion":1,"ports":{"p":"+","n":"−"}},
+    {"id":"motor-fan","label":"电动机（风扇）","category":"用电器","assetId":"motor-fan","assetVersion":1,"ports":{"p":"+","n":"−"},"part":{"actuator":"MotorRotor","axis":[0,0,1]}},
+    {"id":"resistance-wire","label":"导体电阻实验板","category":"电阻","assetId":"resistance-wire","assetVersion":1,"ports":{"p":"+","n":"−"}},
+    {"id":"resistance-box","label":"电阻箱","category":"电阻","assetId":"resistance-box","assetVersion":1,"ports":{"p":"+","n":"−"}},
+    {"id":"pencil-rheostat","label":"铅笔芯变阻器","category":"开关与调节","assetId":"pencil-rheostat","assetVersion":1,"ports":{"p":"A","n":"D","b":"B","c":"C"},"part":{"node":"RheostatSlider","position":{"axis":"x","min":-0.05,"max":0.05},"rail":[[-0.05,0.051,-0.012],[0.05,0.051,-0.012]]}},
+    {"id":"joule-calorimeter","label":"焦耳定律量热器","category":"用电器","assetId":"joule-calorimeter","assetVersion":1,"ports":{"p":"+","n":"−"}},
+    {"id":"potentiometer","label":"三端旋钮电位器","category":"开关与调节","assetId":"potentiometer","assetVersion":1,"ports":{"p":"A","n":"B","c":"滑片"},"part":{"node":"PotentiometerKnob","rotate":{"axis":[0,1,0],"arc":-4.363323}}},
+    {"id":"motor-bare","label":"电动机（裸机）","category":"用电器","assetId":"motor-bare","assetVersion":1,"ports":{"p":"+","n":"−"},"part":{"actuator":"MotorRotor","axis":[1,0,0]}},
+    {"id":"galvanometer","label":"灵敏电流计","category":"仪表","assetId":"galvanometer","assetVersion":1,"ports":{"p":"+","n":"−"},"part":{"node":"MeterNeedle","rotate":{"axis":[0,1,0],"arc":-0.977384}}},
+    {"id":"multimeter-current","label":"多用电表（电流挡）","category":"仪表","assetId":"multimeter","assetVersion":1,"ports":{"p":"+","n":"−"},"part":{"node":"MeterNeedle","rotate":{"axis":[0,1,0],"arc":-1.954769}}},
+    {"id":"multimeter-voltage","label":"多用电表（电压挡）","category":"仪表","assetId":"multimeter","assetVersion":1,"ports":{"p":"+","n":"−"},"part":{"node":"MeterNeedle","rotate":{"axis":[0,1,0],"arc":-1.954769}}}
+  ],
+  "circuit": {
+    "wireCount": 7,
+    "sliderInitial": 0.5,
+    "samples": 3,
+    "minVoltageGap": 0.2,
+    "terminals": {
+      "power:p": { "anchor": "p", "mark": "+", "label": "电源正极" },
+      "power:n": { "anchor": "n", "mark": "−", "label": "电源负极" },
+      "switch:p": { "anchor": "p", "mark": "1", "label": "开关左接线柱" },
+      "switch:n": { "anchor": "n", "mark": "2", "label": "开关右接线柱" },
+      "ammeter:p": { "anchor": "p", "mark": "+", "label": "电流表正接线柱" },
+      "ammeter:n": { "anchor": "n", "mark": "−", "label": "电流表负接线柱" },
+      "resistor:p": { "anchor": "n", "mark": "2", "label": "定值电阻右接线柱" },
+      "resistor:n": { "anchor": "p", "mark": "1", "label": "定值电阻左接线柱" },
+      "voltmeter:p": { "anchor": "p", "mark": "+", "label": "电压表正接线柱" },
+      "voltmeter:n": { "anchor": "n", "mark": "−", "label": "电压表负接线柱" },
+      "rheostat:p": { "anchor": "p", "mark": "A", "label": "变阻器 A 下接线柱" },
+      "rheostat:b": { "anchor": "coil-other", "mark": "B", "label": "变阻器 B 下接线柱" },
+      "rheostat:c": { "anchor": "n", "mark": "C", "label": "变阻器 C 上接线柱" },
+      "rheostat:n": { "anchor": "slider-other", "mark": "D", "label": "变阻器 D 上接线柱" }
+    },
+    "parts": {
+      "switch": { "instrumentId": "switch", "node": "SwitchLever", "rotate": { "axis": [0, 0, 1], "arc": -0.645772 }, "marker": { "instrumentId": "switch", "at": [0.039, 0.085, -0.009] } },
+      "slider": { "instrumentId": "rheostat", "node": "RheostatSlider", "position": { "axis": "x", "min": -0.062, "max": 0.062 }, "rail": [[-0.062, 0.092, -0.029], [0.062, 0.092, -0.029]] },
+      "ammeter": { "instrumentId": "ammeter", "node": "MeterNeedle", "rotate": { "axis": [0, 1, 0], "arc": -1.954769 } },
+      "voltmeter": { "instrumentId": "voltmeter", "node": "MeterNeedle", "rotate": { "axis": [0, 1, 0], "arc": -1.954769 } }
+    }
+  },
+  "parts": [
+    { "instrumentId": "ammeter", "anchor": "p", "label": "电流表", "detail": "电流表串联在主回路中，测通过定值电阻的电流。" },
+    { "instrumentId": "voltmeter", "anchor": "p", "label": "电压表", "detail": "电压表并联在定值电阻两端，测这个电阻两端的电压。" },
+    { "instrumentId": "resistor", "at": [0, 0.033, 0], "label": "定值电阻", "detail": "本次始终使用同一个 10 Ω 电阻，只改变它两端的电压。" },
+    { "instrumentId": "rheostat", "at": [0, 0.073, 0], "label": "滑动变阻器", "detail": "接一个下接线柱和一个上接线柱。滑片离所接下接线柱越远，接入阻值越大。" }
+  ]
+}

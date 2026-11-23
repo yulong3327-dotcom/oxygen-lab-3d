@@ -10,8 +10,16 @@
       "source": "assets/stand/v1/stand.blend",
       "preview": "assets/stand/v1/preview.png",
       "anchors": {
-        "base": [0, 0, 0],
-        "clamp": [0.1, 0.26, 0]
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "clamp": [
+          0.1,
+          0.26,
+          0
+        ]
       },
       "provenance": "项目原创 Blender 模型。参考本仓库现有 Three.js 铁架台的功能分件，未引入第三方资产。"
     },
@@ -24,8 +32,16 @@
       "source": "assets/stand/v2/stand.blend",
       "preview": "assets/stand/v2/preview.png",
       "anchors": {
-        "base": [0, 0, 0],
-        "clamp": [0.1352937, 0.244316, 0.135]
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "clamp": [
+          0.1352937,
+          0.244316,
+          0.135
+        ]
       },
       "provenance": "从修改后的项目原创制氧模型提取。圆环形试管夹由两片带衬垫的夹爪组成；大试管另为独立资产。"
     },
@@ -38,9 +54,21 @@
       "source": "assets/test-tube/v1/test-tube.blend",
       "preview": "assets/test-tube/v1/preview.png",
       "anchors": {
-        "mouth": [0.1896354, 0.035, 0],
-        "closed-end": [-0.209048, 0.035, 0],
-        "clamp": [-0.022048, 0.035, 0]
+        "mouth": [
+          0.1896354,
+          0.035,
+          0
+        ],
+        "closed-end": [
+          -0.209048,
+          0.035,
+          0
+        ],
+        "clamp": [
+          -0.022048,
+          0.035,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -53,10 +81,26 @@
       "source": "assets/alcohol-lamp/v1/alcohol-lamp.blend",
       "preview": "assets/alcohol-lamp/v1/preview.png",
       "anchors": {
-        "base": [0, 0, 0],
-        "wick": [0.001, 0.096, -0.0004],
-        "cap-seat": [0, 0.084, 0],
-        "cap-rest": [-0.068, 0, 0.03]
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "wick": [
+          0.001,
+          0.096,
+          -0.0004
+        ],
+        "cap-seat": [
+          0,
+          0.084,
+          0
+        ],
+        "cap-rest": [
+          -0.068,
+          0,
+          0.03
+        ]
       },
       "provenance": "项目原创 Blender 模型，依据会话参考图重建；未嵌入参考图。"
     },
@@ -69,10 +113,26 @@
       "source": "assets/glass-delivery-tube/v1/glass-delivery-tube.blend",
       "preview": "assets/glass-delivery-tube/v1/preview.png",
       "anchors": {
-        "inlet": [-0.0659908, 0.2031919, 0],
-        "outlet": [0.268, 0.05, 0],
-        "joint-in": [0.0651492, 0.1435786, 0],
-        "joint-out": [0.1028889, 0.1101317, 0]
+        "inlet": [
+          -0.0659908,
+          0.2031919,
+          0
+        ],
+        "outlet": [
+          0.268,
+          0.05,
+          0
+        ],
+        "joint-in": [
+          0.0651492,
+          0.1435786,
+          0
+        ],
+        "joint-out": [
+          0.1028889,
+          0.1101317,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -85,8 +145,16 @@
       "source": "assets/water-trough/v1/water-trough.blend",
       "preview": "assets/water-trough/v1/preview.png",
       "anchors": {
-        "base": [0, 0, 0],
-        "rim": [0, 0.0835, 0]
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "rim": [
+          0,
+          0.0835,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -99,8 +167,16 @@
       "source": "assets/gas-jar-rest/v1/gas-jar-rest.blend",
       "preview": "assets/gas-jar-rest/v1/preview.png",
       "anchors": {
-        "base": [0, 0, 0],
-        "support": [0, 0.0311, 0]
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "support": [
+          0,
+          0.0311,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -113,8 +189,16 @@
       "source": "assets/gas-jar/v1/gas-jar.blend",
       "preview": "assets/gas-jar/v1/preview.png",
       "anchors": {
-        "base": [0, 0, 0],
-        "mouth": [0, 0.291, 0]
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "mouth": [
+          0,
+          0.291,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -127,7 +211,11 @@
       "source": "assets/rubber-stopper/v1/rubber-stopper.blend",
       "preview": "assets/rubber-stopper/v1/preview.png",
       "anchors": {
-        "center": [0, 0, 0]
+        "center": [
+          0,
+          0,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -140,8 +228,16 @@
       "source": "assets/rubber-connector/v1/rubber-connector.blend",
       "preview": "assets/rubber-connector/v1/preview.png",
       "anchors": {
-        "inlet": [-0.0188698, 0.0167235, 0],
-        "outlet": [0.0188698, -0.0167235, 0]
+        "inlet": [
+          -0.0188698,
+          0.0167235,
+          0
+        ],
+        "outlet": [
+          0.0188698,
+          -0.0167235,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -154,7 +250,11 @@
       "source": "assets/glass-plate/v1/glass-plate.blend",
       "preview": "assets/glass-plate/v1/preview.png",
       "anchors": {
-        "center": [0, 0, 0]
+        "center": [
+          0,
+          0,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -167,7 +267,11 @@
       "source": "assets/lamp-cap/v1/lamp-cap.blend",
       "preview": "assets/lamp-cap/v1/preview.png",
       "anchors": {
-        "seat": [0, 0, 0]
+        "seat": [
+          0,
+          0,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -180,7 +284,11 @@
       "source": "assets/hot-towel/v1/hot-towel.blend",
       "preview": "assets/hot-towel/v1/preview.png",
       "anchors": {
-        "center": [0, 0, 0]
+        "center": [
+          0,
+          0,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -193,8 +301,16 @@
       "source": "assets/paper-chute/v1/paper-chute.blend",
       "preview": "assets/paper-chute/v1/preview.png",
       "anchors": {
-        "tip": [-0.175048, -0.015, 0],
-        "handle": [0.2416354, -0.015, 0]
+        "tip": [
+          -0.175048,
+          -0.015,
+          0
+        ],
+        "handle": [
+          0.2416354,
+          -0.015,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -207,7 +323,11 @@
       "source": "assets/cotton-plug/v1/cotton-plug.blend",
       "preview": "assets/cotton-plug/v1/preview.png",
       "anchors": {
-        "center": [0, 0, 0]
+        "center": [
+          0,
+          0,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -220,7 +340,11 @@
       "source": "assets/matchstick/v1/matchstick.blend",
       "preview": "assets/matchstick/v1/preview.png",
       "anchors": {
-        "head": [0, 0, 0]
+        "head": [
+          0,
+          0,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
     },
@@ -233,9 +357,748 @@
       "source": "assets/wooden-splint/v1/wooden-splint.blend",
       "preview": "assets/wooden-splint/v1/preview.png",
       "anchors": {
-        "tip": [0, 0, 0]
+        "tip": [
+          0,
+          0,
+          0
+        ]
       },
       "provenance": "从现有制氧实验中提取并整理的项目原创网格，已转为 Blender 资产。"
+    },
+    {
+      "id": "dc-power-supply",
+      "title": "直流电源（6 V）",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/dc-power-supply/v1/dc-power-supply.blend",
+      "model": "assets/dc-power-supply/v1/dc-power-supply.glb",
+      "preview": "assets/dc-power-supply/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "p": [
+          0.052,
+          0.056,
+          0.021
+        ],
+        "n": [
+          -0.052,
+          0.056,
+          0.021
+        ]
+      },
+      "provenance": "项目原创 Blender 网格。旧版 power-supply.png 仅作外形参考；新增 6 V 铭牌和顶面插孔，未嵌入原图。"
+    },
+    {
+      "id": "knife-switch",
+      "title": "单刀开关",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/knife-switch/v1/knife-switch.blend",
+      "model": "assets/knife-switch/v1/knife-switch.glb",
+      "preview": "assets/knife-switch/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "p": [
+          -0.066,
+          0.032,
+          0.017
+        ],
+        "n": [
+          0.066,
+          0.032,
+          0.017
+        ],
+        "lever": [
+          0.039,
+          0.1,
+          -0.009
+        ]
+      },
+      "provenance": "项目原创 Blender 网格。参考旧版 switch-open.png 和 switch-closed.png 的刀片与触点，未嵌入原图。"
+    },
+    {
+      "id": "analog-ammeter",
+      "title": "电流表（0–0.6 A）",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/analog-ammeter/v1/analog-ammeter.blend",
+      "model": "assets/analog-ammeter/v1/analog-ammeter.glb",
+      "preview": "assets/analog-ammeter/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "p": [
+          0.042,
+          0.041,
+          0.046
+        ],
+        "n": [
+          -0.042,
+          0.041,
+          0.046
+        ]
+      },
+      "provenance": "项目原创 Blender 网格。参考旧版 ammeter.png，改为 0–0.6 A 单量程表盘，每小格 0.02 A，未嵌入原图。"
+    },
+    {
+      "id": "fixed-resistor",
+      "title": "定值电阻（10 Ω）",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/fixed-resistor/v1/fixed-resistor.blend",
+      "model": "assets/fixed-resistor/v1/fixed-resistor.glb",
+      "preview": "assets/fixed-resistor/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "p": [
+          -0.05,
+          0.031,
+          0
+        ],
+        "n": [
+          0.05,
+          0.031,
+          0
+        ]
+      },
+      "provenance": "项目原创 Blender 网格。参考旧版 resistor.png 的陶瓷电阻和底座，按实验标为 10 Ω，未嵌入原图。"
+    },
+    {
+      "id": "analog-voltmeter",
+      "title": "电压表（0–6 V）",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/analog-voltmeter/v1/analog-voltmeter.blend",
+      "model": "assets/analog-voltmeter/v1/analog-voltmeter.glb",
+      "preview": "assets/analog-voltmeter/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "p": [
+          0.042,
+          0.041,
+          0.046
+        ],
+        "n": [
+          -0.042,
+          0.041,
+          0.046
+        ]
+      },
+      "provenance": "项目原创 Blender 网格。参考旧版 voltmeter.png，改为 0–6 V 单量程表盘，每小格 0.2 V，未嵌入原图。"
+    },
+    {
+      "id": "sliding-rheostat",
+      "title": "滑动变阻器（0–50 Ω）",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/sliding-rheostat/v1/sliding-rheostat.blend",
+      "model": "assets/sliding-rheostat/v1/sliding-rheostat.glb",
+      "preview": "assets/sliding-rheostat/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "p": [
+          -0.089,
+          0.031,
+          0.029
+        ],
+        "n": [
+          -0.089,
+          0.031,
+          -0.029
+        ],
+        "coil-other": [
+          0.089,
+          0.031,
+          0.029
+        ],
+        "slider-other": [
+          0.089,
+          0.031,
+          -0.029
+        ],
+        "slider-min": [
+          -0.062,
+          0.0905,
+          -0.007
+        ],
+        "slider-max": [
+          0.062,
+          0.0905,
+          -0.007
+        ]
+      },
+      "provenance": "项目原创 Blender 网格。参考旧版 rheostat.png 的线圈和滑片，新建 A/B 电阻丝与 C/D 滑片导轨接线柱，未嵌入原图。"
+    },
+    {
+      "id": "analog-ammeter",
+      "title": "学校实验电流表（0–0.6 A）",
+      "version": 2,
+      "status": "candidate",
+      "source": "assets/analog-ammeter/v2/analog-ammeter.blend",
+      "model": "assets/analog-ammeter/v2/analog-ammeter.glb",
+      "preview": "assets/analog-ammeter/v2/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "p": [
+          0.035,
+          0.038,
+          0.035
+        ],
+        "n": [
+          -0.035,
+          0.038,
+          0.035
+        ]
+      },
+      "provenance": "项目原创 Blender 网格。参考旧版 ammeter.png 和广州市育星 15008（J0407）实物图及尺寸，重建倾斜表头、接线台和罩窗。本实验使用 0–0.6 A 单量程及独立转轴，每小格 0.02 A；未嵌入参考图。"
+    },
+    {
+      "id": "analog-voltmeter",
+      "title": "学校实验电压表（0–6 V）",
+      "version": 2,
+      "status": "candidate",
+      "source": "assets/analog-voltmeter/v2/analog-voltmeter.blend",
+      "model": "assets/analog-voltmeter/v2/analog-voltmeter.glb",
+      "preview": "assets/analog-voltmeter/v2/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "p": [
+          0.035,
+          0.038,
+          0.035
+        ],
+        "n": [
+          -0.035,
+          0.038,
+          0.035
+        ]
+      },
+      "provenance": "项目原创 Blender 网格。参考旧版 voltmeter.png、GSX-J0408 外形尺寸及同系列电流表，重建倾斜表头、接线台和罩窗。0–6 V 为本实验单量程适配，每小格 0.2 V；未嵌入参考图。"
+    },
+    {
+      "id": "battery-single",
+      "title": "单节电池座",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/battery-single/v1/battery-single.blend",
+      "model": "assets/battery-single/v1/battery-single.glb",
+      "preview": "assets/battery-single/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.0455,
+          0.029,
+          0.012
+        ],
+        "p": [
+          -0.0455,
+          0.029,
+          0.012
+        ]
+      },
+      "provenance": "依据旧版电学器材库的外形和端子用途原创重绘 Blender 模型，未嵌入参考图。"
+    },
+    {
+      "id": "battery-pack",
+      "title": "双节电池组",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/battery-pack/v1/battery-pack.blend",
+      "model": "assets/battery-pack/v1/battery-pack.glb",
+      "preview": "assets/battery-pack/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.0765,
+          0.029,
+          0.012
+        ],
+        "p": [
+          -0.0765,
+          0.029,
+          0.012
+        ]
+      },
+      "provenance": "依据旧版电学器材库的外形和端子用途原创重绘 Blender 模型，未嵌入参考图。"
+    },
+    {
+      "id": "switch-spdt",
+      "title": "单刀双掷开关",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/switch-spdt/v1/switch-spdt.blend",
+      "model": "assets/switch-spdt/v1/switch-spdt.glb",
+      "preview": "assets/switch-spdt/v1/preview.png",
+      "anchors": {
+        "b": [
+          0.059,
+          0.032,
+          0.018
+        ],
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "lever": [
+          0,
+          0.04,
+          -0.009
+        ],
+        "n": [
+          -0.059,
+          0.032,
+          0.018
+        ],
+        "p": [
+          0,
+          0.032,
+          0.018
+        ]
+      },
+      "provenance": "依据旧版电学器材库的外形和端子用途原创重绘 Blender 模型，未嵌入参考图。"
+    },
+    {
+      "id": "lamp-bulb",
+      "title": "小灯泡",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/lamp-bulb/v1/lamp-bulb.blend",
+      "model": "assets/lamp-bulb/v1/lamp-bulb.glb",
+      "preview": "assets/lamp-bulb/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.045,
+          0.029,
+          0.014
+        ],
+        "p": [
+          -0.045,
+          0.029,
+          0.014
+        ]
+      },
+      "provenance": "依据旧版电学器材库的外形和端子用途原创重绘 Blender 模型，未嵌入参考图。"
+    },
+    {
+      "id": "led",
+      "title": "发光二极管",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/led/v1/led.blend",
+      "model": "assets/led/v1/led.glb",
+      "preview": "assets/led/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.031,
+          0.029,
+          0.009
+        ],
+        "p": [
+          -0.031,
+          0.029,
+          0.009
+        ]
+      },
+      "provenance": "依据旧版电学器材库的外形和端子用途原创重绘 Blender 模型，未嵌入参考图。"
+    },
+    {
+      "id": "solenoid",
+      "title": "通电螺线管",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/solenoid/v1/solenoid.blend",
+      "model": "assets/solenoid/v1/solenoid.glb",
+      "preview": "assets/solenoid/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.039,
+          0.029,
+          0.017
+        ],
+        "p": [
+          -0.039,
+          0.029,
+          0.017
+        ]
+      },
+      "provenance": "依据旧版电学器材库的外形和端子用途原创重绘 Blender 模型，未嵌入参考图。"
+    },
+    {
+      "id": "bell",
+      "title": "电铃",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/bell/v1/bell.blend",
+      "model": "assets/bell/v1/bell.glb",
+      "preview": "assets/bell/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.043,
+          0.029,
+          0.019
+        ],
+        "p": [
+          -0.043,
+          0.029,
+          0.019
+        ]
+      },
+      "provenance": "依据旧版电学器材库的外形和端子用途原创重绘 Blender 模型，未嵌入参考图。"
+    },
+    {
+      "id": "buzzer",
+      "title": "两脚蜂鸣器",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/buzzer/v1/buzzer.blend",
+      "model": "assets/buzzer/v1/buzzer.glb",
+      "preview": "assets/buzzer/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.027,
+          0.029,
+          0.012
+        ],
+        "p": [
+          -0.027,
+          0.029,
+          0.012
+        ]
+      },
+      "provenance": "依据旧版电学器材库的外形和端子用途原创重绘 Blender 模型，未嵌入参考图。"
+    },
+    {
+      "id": "motor-fan",
+      "title": "电动机（风扇）",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/motor-fan/v1/motor-fan.blend",
+      "model": "assets/motor-fan/v1/motor-fan.glb",
+      "preview": "assets/motor-fan/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.044,
+          0.029,
+          0.018
+        ],
+        "p": [
+          -0.044,
+          0.029,
+          0.018
+        ]
+      },
+      "provenance": "依据旧版电学器材库的外形和端子用途原创重绘 Blender 模型，未嵌入参考图。"
+    },
+    {
+      "id": "resistance-wire",
+      "title": "导体电阻实验板",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/resistance-wire/v1/resistance-wire.blend",
+      "model": "assets/resistance-wire/v1/resistance-wire.glb",
+      "preview": "assets/resistance-wire/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.08,
+          0.031,
+          0.016
+        ],
+        "p": [
+          -0.08,
+          0.031,
+          0.016
+        ]
+      },
+      "provenance": "参考旧版电学器材库的形状及用途，原创重绘 Blender 网格，未嵌入原图。"
+    },
+    {
+      "id": "resistance-box",
+      "title": "电阻箱",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/resistance-box/v1/resistance-box.blend",
+      "model": "assets/resistance-box/v1/resistance-box.glb",
+      "preview": "assets/resistance-box/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.037,
+          0.056,
+          0.036
+        ],
+        "p": [
+          -0.037,
+          0.056,
+          0.036
+        ]
+      },
+      "provenance": "参考旧版电学器材库的形状及用途，原创重绘 Blender 网格，未嵌入原图。"
+    },
+    {
+      "id": "pencil-rheostat",
+      "title": "铅笔芯变阻器",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/pencil-rheostat/v1/pencil-rheostat.blend",
+      "model": "assets/pencil-rheostat/v1/pencil-rheostat.glb",
+      "preview": "assets/pencil-rheostat/v1/preview.png",
+      "anchors": {
+        "b": [
+          0.074,
+          0.031,
+          0.023
+        ],
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "c": [
+          -0.074,
+          0.031,
+          -0.024
+        ],
+        "n": [
+          0.074,
+          0.031,
+          -0.024
+        ],
+        "p": [
+          -0.074,
+          0.031,
+          0.023
+        ],
+        "slider-max": [
+          0.05,
+          0.051,
+          -0.012
+        ],
+        "slider-min": [
+          -0.05,
+          0.051,
+          -0.012
+        ]
+      },
+      "provenance": "参考旧版电学器材库的形状及用途，原创重绘 Blender 网格，未嵌入原图。"
+    },
+    {
+      "id": "potentiometer",
+      "title": "三端旋钮电位器",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/potentiometer/v1/potentiometer.blend",
+      "model": "assets/potentiometer/v1/potentiometer.glb",
+      "preview": "assets/potentiometer/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "c": [
+          0,
+          0.031,
+          0.024
+        ],
+        "n": [
+          0.032,
+          0.031,
+          0.024
+        ],
+        "p": [
+          -0.032,
+          0.031,
+          0.024
+        ]
+      },
+      "provenance": "参考旧版电学器材库的形状及用途，原创重绘 Blender 网格，未嵌入原图。"
+    },
+    {
+      "id": "joule-calorimeter",
+      "title": "焦耳定律量热器",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/joule-calorimeter/v1/joule-calorimeter.blend",
+      "model": "assets/joule-calorimeter/v1/joule-calorimeter.glb",
+      "preview": "assets/joule-calorimeter/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.05,
+          0.029,
+          0.022
+        ],
+        "p": [
+          -0.05,
+          0.029,
+          0.022
+        ]
+      },
+      "provenance": "参考旧版电学器材库的形状及用途，原创重绘 Blender 网格，未嵌入原图。"
+    },
+    {
+      "id": "motor-bare",
+      "title": "电动机（裸机）",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/motor-bare/v1/motor-bare.blend",
+      "model": "assets/motor-bare/v1/motor-bare.glb",
+      "preview": "assets/motor-bare/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          0.036,
+          0.029,
+          0.021
+        ],
+        "p": [
+          -0.036,
+          0.029,
+          0.021
+        ]
+      },
+      "provenance": "参考旧版电学器材库的形状及用途，原创重绘 Blender 网格，未嵌入原图。"
+    },
+    {
+      "id": "galvanometer",
+      "title": "灵敏电流计",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/galvanometer/v1/galvanometer.blend",
+      "model": "assets/galvanometer/v1/galvanometer.glb",
+      "preview": "assets/galvanometer/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          -0.032,
+          0.038,
+          0.035
+        ],
+        "p": [
+          0.032,
+          0.038,
+          0.035
+        ]
+      },
+      "provenance": "参考旧版电学器材库的形状及用途，原创重绘 Blender 网格，未嵌入原图。"
+    },
+    {
+      "id": "multimeter",
+      "title": "指针式多用电表",
+      "version": 1,
+      "status": "candidate",
+      "source": "assets/multimeter/v1/multimeter.blend",
+      "model": "assets/multimeter/v1/multimeter.glb",
+      "preview": "assets/multimeter/v1/preview.png",
+      "anchors": {
+        "base": [
+          0,
+          0,
+          0
+        ],
+        "n": [
+          -0.031,
+          0.044,
+          0.061
+        ],
+        "p": [
+          0.031,
+          0.044,
+          0.061
+        ]
+      },
+      "provenance": "参考旧版电学器材库的形状及用途，原创重绘 Blender 网格，未嵌入原图。"
     }
   ]
 }

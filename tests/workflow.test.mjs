@@ -17,6 +17,7 @@ function fixture(t) {
   cpSync(resolve(root, 'experiments/stand-placement'), resolve(dir, 'experiments/stand-placement'), { recursive: true });
   mkdirSync(resolve(dir, 'platform'));
   cpSync(resolve(root, 'platform/player.html'), resolve(dir, 'platform/player.html'));
+  cpSync(resolve(root, 'styles.css'), resolve(dir, 'styles.css'));
   return dir;
 }
 
@@ -51,6 +52,76 @@ test('public listing requires current reviews and an approved asset', t => {
   config.instruments[0].assetVersion = 999;
   save(configPath, config);
   assert.throws(() => validate(id, dir), /invalid assetId, assetVersion/);
+});
+
+test('state effects reference declared states and unique GLB nodes', t => {
+  const dir = fixture(t);
+  const id = 'stand-placement';
+  const path = resolve(dir, `experiments/${id}/experiment.json`);
+  const config = JSON.parse(readFileSync(path, 'utf8'));
+  config.instruments.push({
+    ...config.instruments[0], id: 'display-stand', interactive: false,
+    states: { exposed: ['Upright'], hidden: [] }, initialState: 'exposed',
+    animations: { Upright: { type: 'pulse', periodMs: 800, scale: [1, 1.1, 1] } }
+  });
+  const step = config.steps[0];
+  step.effects = [{ instrumentId: 'display-stand', state: 'hidden' }];
+  save(path, config);
+  assert.equal(validate(id, dir).steps, 2);
+
+  step.effects[0].state = 'unknown';
+  save(path, config);
+  assert.throws(() => validate(id, dir), /invalid or duplicate state effect/);
+  step.effects[0].state = 'hidden';
+  config.instruments[1].states.hidden = ['Nonexistent'];
+  save(path, config);
+  assert.throws(() => validate(id, dir), /GLB node Nonexistent must exist exactly once/);
+  config.instruments[1].states.hidden = [];
+  step.action.instrumentId = 'display-stand';
+  save(path, config);
+  assert.throws(() => validate(id, dir), /invalid action or instrument reference/);
+});
+
+test('guided assembly and procedure reject invalid locations and chronology', t => {
+  const dir = fixture(t);
+  const id = 'stand-placement';
+  const path = resolve(dir, `experiments/${id}/experiment.json`);
+  const config = JSON.parse(readFileSync(path, 'utf8'));
+  const ref = { instrumentId: 'stand-1', anchor: 'clamp' };
+  config.instruments.push({ ...config.instruments[0], id: 'stand-2' });
+  config.assembly = [
+    { instrumentId: 'stand-1', hint: 'Place the first stand', area: [0.03, 0.015] },
+    { instrumentId: 'stand-2', hint: 'Attach the second stand', anchor: 'base', parent: 'stand-1' }
+  ];
+  config.steps[0].action = { type: 'transfer', from: ref, to: { instrumentId: 'stand-2', at: [0, 0, 0] }, fromLabel: 'Holder', toLabel: 'Base' };
+  config.steps[1].action = { type: 'observe', durationMs: 1200 };
+  config.parts = [{ ...ref, label: 'Clamp', detail: 'Holds the tube.' }];
+  config.conclusion = 'Observed the assembled stands.';
+  save(path, config);
+  assert.equal(validate(id, dir).steps, 2);
+
+  const reject = (change, pattern) => {
+    const bad = structuredClone(config);
+    change(bad);
+    save(path, bad);
+    assert.throws(() => validate(id, dir), pattern);
+  };
+  reject(bad => bad.assembly.pop(), /assembly must list every instrument once/);
+  reject(bad => bad.assembly.reverse(), /parent must be an earlier slot/);
+  reject(bad => { bad.assembly[0].area = [0.02, -0.01]; }, /invalid assembly area/);
+  reject(bad => { bad.steps[0].action.to = { instrumentId: 'stand-2', anchor: 'unknown' }; }, /invalid transfer endpoint/);
+  reject(bad => { bad.steps[1].action.durationMs = 0; }, /observe durationMs/);
+  reject(bad => { bad.parts[0].instrumentId = 'unknown'; }, /invalid completion part/);
+});
+
+test('shared styles invalidate web and teaching fingerprints', t => {
+  const dir = fixture(t);
+  const original = fingerprints('stand-placement', dir);
+  writeFileSync(resolve(dir, 'styles.css'), 'body { margin: 1px; }');
+  const changed = fingerprints('stand-placement', dir);
+  assert.equal(changed.model, original.model);
+  assert.notEqual(changed.web, original.web);
+  assert.notEqual(changed.teaching, original.teaching);
 });
 
 test('release package excludes drafts, review files and unapproved asset sources', () => {
