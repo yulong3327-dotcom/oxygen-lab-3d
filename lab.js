@@ -19,11 +19,13 @@
         renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.7));
         renderer.setClearColor(0, 0);
         renderer.outputColorSpace = T.SRGBColorSpace;
-        scene.add(new T.HemisphereLight(0xffffff, 0xb3beca, 2.1));
-        const key = new T.DirectionalLight(0xffffff, 2.45);
+        renderer.toneMapping = T.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.12;
+        scene.add(new T.HemisphereLight(0xffffff, 0xb3beca, .92));
+        const key = new T.DirectionalLight(0xffffff, 1.28);
         key.position.set(-4,8,4);
         scene.add(key);
-        const rim = new T.DirectionalLight(0xffffff, 1.35);
+        const rim = new T.DirectionalLight(0xffffff, .62);
         rim.position.set(4,3,-5);
         scene.add(rim);
 
