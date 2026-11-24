@@ -73,6 +73,7 @@ h1 { font-size: .99rem; font-weight: 700; }
 .steps li[aria-current="step"] { background: var(--selected); color: var(--accent-text); font-weight: 650; }
 .steps li[data-complete] { color: #4a5566; }
 .lab-tools { display: flex; align-items: center; gap: 3px; }
+.lab-tools [data-lab="pan"][aria-pressed="true"] { color: var(--accent-text); background: var(--selected); }
 .play { justify-self: end; white-space: nowrap; }
 
 .workbench { min-width: 0; display: grid; grid-template-columns: clamp(159px, 15vw, 208px) minmax(0, 1fr) clamp(198px, 18vw, 247px); }
@@ -127,6 +128,7 @@ h1 { font-size: .99rem; font-weight: 700; }
 .lab-canvas, .lab-overlay { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
 .lab-canvas { cursor: grab; touch-action: none; }
 .lab-canvas:active { cursor: grabbing; }
+.lab-stage[data-view="pan"] .lab-canvas { cursor: move; }
 .lab-overlay { pointer-events: none; }
 .lab-interactions { z-index: 2; }
 .lab-action-hint {
@@ -161,7 +163,7 @@ h1 { font-size: .99rem; font-weight: 700; }
   transform: translate(-50%, -50%);
 }
 .lab-action-source {
-  background: color-mix(in srgb, var(--accent) 64%, transparent);
+  background: color-mix(in srgb, var(--accent) 49%, transparent);
   color: var(--surface);
   box-shadow: 0 0 0 3px #ffffffd9, 0 3px 8px #153e853e;
   pointer-events: auto;
@@ -171,7 +173,7 @@ h1 { font-size: .99rem; font-weight: 700; }
 }
 .lab-action-source > svg,
 .lab-action-destination > svg { width: 20px; height: 20px; pointer-events: none; }
-.lab-action-source:is(:hover,[aria-pressed="true"]) { background: color-mix(in srgb, var(--accent-hover) 86%, transparent); }
+.lab-action-source:is(:hover,[aria-pressed="true"]) { background: color-mix(in srgb, var(--accent-hover) 71%, transparent); }
 .lab-action-source:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
 .lab-interactions[data-kind="drag"] .lab-action-source { cursor: grab; }
 .lab-interactions[data-kind="preheat"] .lab-action-source { cursor: ew-resize; }
@@ -179,7 +181,7 @@ h1 { font-size: .99rem; font-weight: 700; }
 .lab-action-destination {
   z-index: 1;
   border-style: dashed;
-  background: #e9f0ff99;
+  background: #e9f0ff73;
   color: var(--accent-text);
   pointer-events: auto;
   touch-action: manipulation;

@@ -116,16 +116,25 @@
         const steelDark=standard(p=>mix(p.fg,p.muted,.38),{metalness:.13,roughness:.39});
         const steelLight=standard(p=>mix(p.muted,p.bg,.45),{metalness:.17,roughness:.28});
         const rubber=standard(p=>mix(p.fg,p.muted,.22),{roughness:.75});
-        const floor = flat(p=>mix(p.bg,p.muted,p.light?.075:.12),{transparent:true,opacity:.72});
-        const bench={left:-5.35,right:5.45,back:-3.20,front:2.05};
-        box(bench.right-bench.left,.062,bench.front-bench.back,floor,(bench.left+bench.right)/2,-.045,(bench.back+bench.front)/2);
-        const grid = [];
-        for(let x=-5;x<=5;x+=.5) grid.push(x,-.009,bench.back+.07,x,-.009,bench.front-.07);
-        for(let z=-3;z<=2;z+=.5) grid.push(bench.left+.07,-.009,z,bench.right-.07,-.009,z);
-        const gridMat=color(new T.LineBasicMaterial({transparent:true,opacity:.2}),p=>p.muted);
-        const gridGeo=new T.BufferGeometry();
-        gridGeo.setAttribute('position',new T.Float32BufferAttribute(grid,3));
-        scene.add(new T.LineSegments(gridGeo,gridMat));
+        // Follow the camera in whole grid cells so the visible plane has no fixed world edge.
+        const gridMat=new T.ShaderMaterial({
+          uniforms:{tint:{value:pal.muted.clone()},focus:{value:new T.Vector2()}},
+          transparent:true,depthWrite:false,
+          vertexShader:'varying vec2 ground; void main(){ground=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+          fragmentShader:[
+            'uniform vec3 tint; uniform vec2 focus; varying vec2 ground;',
+            'void main(){vec2 cells=2.*ground, pixel=max(fwidth(cells),vec2(.0001));',
+            'vec2 stripe=abs(fract(cells+.5)-.5)/pixel;',
+            'float line=1.-smoothstep(.15,1.,min(stripe.x,stripe.y));',
+            'float fade=(1.-smoothstep(13.,32.,length(ground-focus)))*(1.-smoothstep(.35,.75,max(pixel.x,pixel.y)));',
+            'gl_FragColor=vec4(tint,.17*line*fade);',
+            '#include <colorspace_fragment>',
+            '}'
+          ].join('\n')
+        });
+        themed.push(p=>gridMat.uniforms.tint.value.copy(p.muted));
+        const groundGrid=mesh(new T.PlaneGeometry(150,150),gridMat,0,-.014,0);
+        groundGrid.rotation.x=-Math.PI/2;
         function shade(x,z,rx,rz){
           const geo=new T.PlaneGeometry(rx*2,rz*2);
           const mat=new T.ShaderMaterial({transparent:true,depthWrite:false,
@@ -891,27 +900,30 @@
             root.dataset.dragging=drag.slot.id;
             choose(drag.slot.id);
           }
-          const slot=drag.slot, r=stage.getBoundingClientRect();
-          const x=e.clientX-r.left,y=e.clientY-r.top;
+          const r=stage.getBoundingClientRect();
+          drag.pointer={x:e.clientX-r.left,y:e.clientY-r.top,type:e.pointerType};
+          drag.avatar.style.left=e.clientX+'px';drag.avatar.style.top=e.clientY+'px';
+          updateDragPosition();
+          request();
+        }
+        function updateDragPosition(){
+          const {slot,pointer:{x,y,type}}=drag;
           drag.inside=x>=0&&y>=0&&x<=width&&y<=height;
           drag.avatar.hidden=drag.inside;
-          drag.avatar.style.left=e.clientX+'px';drag.avatar.style.top=e.clientY+'px';
           drag.hit=false;
           if(drag.inside){
             const [sx,sy]=coords(slot.xyz);
+            const r=stage.getBoundingClientRect();
             const dropSlot=slot.btn.getBoundingClientRect();
             const tx=dropSlot.left+dropSlot.width/2-r.left,ty=dropSlot.top+dropSlot.height/2-r.top;
             const ax=x+drag.gripX,ay=y+drag.gripY;
-            const radius=e.pointerType==='touch'?35:34;
-            drag.hit=Math.min(Math.hypot(ax-sx,ay-sy),Math.hypot(x-tx,y-ty))<=radius;
+            const radius=type==='touch'?35:34;
+            const markerDistance=slot.btn.style.visibility==='hidden'?Infinity:Math.hypot(x-tx,y-ty);
+            drag.hit=Math.min(Math.hypot(ax-sx,ay-sy),markerDistance)<=radius;
             let delta=V(0,0,0);
             if(!drag.hit){
-              const b=projectedBox(slot,delta);
-              const fit=(v,min,max)=>(min<=max?U.clamp(v,min,max):(min+max)/2);
-              const cx=fit(ax,sx-b.left+9,width-(b.right-sx)-9);
-              const cy=fit(ay,sy-b.top+9,height-(b.bottom-sy)-9);
               const depth=slot.xyz.clone().project(camera).z;
-              delta=V(2*cx/width-1,1-2*cy/height,depth).unproject(camera).sub(slot.xyz);
+              delta=V(2*ax/width-1,1-2*ay/height,depth).unproject(camera).sub(slot.xyz);
             }
             loose={slot,delta};
           } else {
@@ -920,7 +932,6 @@
             apparatus.get(slot.id).visible=false;
           }
           slot.btn.classList.toggle('is-over',drag.hit);
-          request();
         }
         function endDrag(e,dropped){
           if(drag?.id!==e.pointerId) return;
@@ -1094,19 +1105,35 @@
         }
         parts.forEach(p=>p.btn.addEventListener('click',()=>selectPart(selected===p.index?-1:p.index)));
 
-        const target=V(-.06,1.69,.07);
+        const homeTarget=V(-.06,1.69,.07), target=homeTarget.clone();
         const home={az:.25,tilt:.295,zoom:1};
-        let az=home.az,tilt=home.tilt,zoom=home.zoom, width=0,height=0;
-        const resetView=()=>{az=home.az;tilt=home.tilt;zoom=1;request();};
+        let az=home.az,tilt=home.tilt,zoom=home.zoom, width=0,height=0,panMode=false;
+        const panButton=el('pan');
+        function setPanMode(value){
+          panMode=value;
+          panButton.setAttribute('aria-pressed',String(value));
+          stage.dataset.view=value?'pan':'orbit';
+        }
+        const resetView=()=>{az=home.az;tilt=home.tilt;zoom=1;target.copy(homeTarget);setPanMode(false);request();};
+        const viewWidth=()=>Math.max(6.32,2.94*width/height)/zoom;
+        function panCanvas(dx,dy){
+          const horizontal=2*viewWidth()/width;
+          const forward=dy*horizontal/Math.max(.36,Math.sin(tilt));
+          target.x-=dx*horizontal*Math.cos(az)+forward*Math.sin(az);
+          target.z+=dx*horizontal*Math.sin(az)-forward*Math.cos(az);
+        }
         function positionCamera() {
           const radius=19;
           camera.position.set(target.x+radius*Math.sin(az)*Math.cos(tilt),
             target.y+radius*Math.sin(tilt),target.z+radius*Math.cos(az)*Math.cos(tilt));
           camera.lookAt(target);
-          const xo=Math.max(6.32,2.94*width/height)/zoom, yo=xo*height/width;
+          const xo=viewWidth(), yo=xo*height/width;
           camera.left=-xo;camera.right=xo;camera.top=yo;camera.bottom=-yo;
           camera.updateProjectionMatrix();
           camera.updateMatrixWorld();
+          groundGrid.position.x=Math.round(target.x*2)/2;
+          groundGrid.position.z=Math.round(target.z*2)/2;
+          gridMat.uniforms.focus.value.set(target.x-groundGrid.position.x,groundGrid.position.z-target.z);
         }
         function coords(v) {
           const p=v.clone().project(camera);
@@ -1151,6 +1178,9 @@
           for(const {btn,xyz,offset,id} of slotList){
             if(btn.hidden) continue;
             const [x,y]=coords(xyz);
+            const inView=x>=0&&x<=width&&y>=0&&y<=height;
+            btn.style.visibility=inView?'':'hidden';
+            if(!inView) continue;
             const w=btn.offsetWidth,h=btn.offsetHeight;
             const tx=x+offset[0]-w/2, ty=y+offset[1]-h/2;
             let best,score=Infinity;
@@ -1181,13 +1211,22 @@
         el('zoom-out').addEventListener('click',()=>changeZoom(1/1.17));
         el('orbit').addEventListener('click',()=>{az=(az+.35)%twoPi; request();});
         el('home').addEventListener('click',resetView);
+        panButton.addEventListener('click',()=>setPanMode(!panMode));
+        panButton.addEventListener('keydown',e=>{
+          if(!panMode||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) return;
+          e.preventDefault();
+          panCanvas(e.key==='ArrowLeft'?48:e.key==='ArrowRight'?-48:0,e.key==='ArrowUp'?48:e.key==='ArrowDown'?-48:0);
+          request();
+        });
         canvas.addEventListener('wheel',e=>{e.preventDefault();changeZoom(Math.exp(-U.clamp(e.deltaY,-150,150)*.002));},{passive:false});
+        canvas.addEventListener('contextmenu',e=>e.preventDefault());
         const fingers=new Map();
         const distance=()=>{const [a,b]=fingers.values();return Math.hypot(a.x-b.x,a.y-b.y);};
         canvas.addEventListener('pointerdown',e=>{
-          if(e.button!==0&&e.pointerType==='mouse') return;
-          if(actionPointerDown(e,false)) return;
-          if(loose&&!drag){
+          if(fingers.size>=2||drag||actionTouch||e.pointerType==='mouse'&&e.button>2) return;
+          const pan=panMode||e.button===1||e.button===2||e.shiftKey;
+          if(!pan&&!fingers.size&&actionPointerDown(e,false)) return;
+          if(!pan&&!fingers.size&&loose){
             const r=stage.getBoundingClientRect(), x=e.clientX-r.left,y=e.clientY-r.top;
             const b=projectedBox(loose.slot,loose.delta);
             if(x>=b.left&&x<=b.right&&y>=b.top&&y<=b.bottom){
@@ -1196,16 +1235,23 @@
             }
           }
           canvas.setPointerCapture(e.pointerId);
-          fingers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+          fingers.set(e.pointerId,{x:e.clientX,y:e.clientY,pan});
         });
         canvas.addEventListener('pointermove',e=>{
           if(!fingers.has(e.pointerId)) return;
           const old=fingers.get(e.pointerId), gap=fingers.size===2?distance():0;
-          fingers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-          if(fingers.size===2&&gap>0) changeZoom(distance()/gap);
+          const dx=e.clientX-old.x,dy=e.clientY-old.y;
+          fingers.set(e.pointerId,{x:e.clientX,y:e.clientY,pan:old.pan});
+          if(fingers.size===2&&gap>0){
+            panCanvas(dx/2,dy/2);
+            changeZoom(distance()/gap);
+          }
           else if(fingers.size===1){
-            az=(az-(e.clientX-old.x)*.009)%twoPi;
-            tilt=U.clamp(tilt+(e.clientY-old.y)*.007,-.12,1.22);
+            if(old.pan) panCanvas(dx,dy);
+            else {
+              az=(az-dx*.009)%twoPi;
+              tilt=U.clamp(tilt+dy*.007,-.12,1.22);
+            }
             request();
           }
         });
@@ -1472,6 +1518,9 @@
         function layoutPreheat(){
           const left=coords(lampGrip.clone().setX(preheatMin));
           const right=coords(lampGrip.clone().setX(preheatMax));
+          const visible=onCanvas(left)&&onCanvas(right);
+          actionSource.style.visibility=preheatTrack.style.visibility=visible?'':'hidden';
+          if(!visible){preheatGuide=null;return;}
           const dx=right[0]-left[0],dy=right[1]-left[1],projected=Math.hypot(dx,dy);
           const [ux,uy]=projected>=8?[dx/projected,dy/projected]:[1,0];
           const span=Math.max(48,projected+10);
@@ -1490,11 +1539,14 @@
         }
         function layoutAction(){
           const op=currentAction(), margin=24;
-          const placePoint=(p)=>{const [x,y]=coords(p);return [U.clamp(x,margin,width-margin),U.clamp(y,margin,height-margin)];};
           actionHint.style.left='10px';
           actionHint.style.top='10px';
           if(!op?.source||op.kind==='preheat'||reaction) return;
-          const sourcePoint=placePoint(op.from), b=placePoint(op.to);
+          const from=coords(op.from),to=coords(op.to),visible=onCanvas(from)&&onCanvas(to);
+          actionSource.style.visibility=actionDestination.style.visibility=actionLine.style.visibility=visible?'':'hidden';
+          if(!visible) return;
+          const keepButtonInView=([x,y])=>[U.clamp(x,margin,width-margin),U.clamp(y,margin,height-margin)];
+          const sourcePoint=keepButtonInView(from), b=keepButtonInView(to);
           const a=step===0
             ? [U.clamp(sourcePoint[0]+(width<520?35:46),margin,width-margin),Math.max(margin,sourcePoint[1]-13)]
             : sourcePoint;
@@ -1519,6 +1571,7 @@
           actionLine.style.transform='rotate('+Math.atan2(dy,dx)+'rad)';
           return {a,b,sourcePoint};
         }
+        function onCanvas([x,y]){return x>=0&&x<=width&&y>=0&&y<=height;}
         function clearActionDrag(){
           actionTouch=null;
           delete actionOverlay.dataset.dragging;
@@ -1530,7 +1583,7 @@
           const bounds=stage.getBoundingClientRect(), x=e.clientX-bounds.left,y=e.clientY-bounds.top;
           if(op.kind==='preheat'){
             layoutPreheat();
-            if(!handle&&Math.hypot(x-preheatGuide.sourcePoint[0],y-preheatGuide.sourcePoint[1])>29) return false;
+            if(!preheatGuide||!handle&&Math.hypot(x-preheatGuide.sourcePoint[0],y-preheatGuide.sourcePoint[1])>29) return false;
             e.preventDefault();
             e.currentTarget.setPointerCapture(e.pointerId);
             actionTouch={id:e.pointerId,x,y,preheat:true,preheatX,preheatVisited,guide:preheatGuide};
@@ -1879,6 +1932,7 @@
           if(step===7&&time>1.02)next=time<1.81?10:11;
           if(phase!==next){phase=next;if(assembled) updateNote();}
         }
+        let lastFrame=0;
         function frame(at){
           raf=0;
           if(!width||!height) return;
@@ -1887,7 +1941,17 @@
             time=U.lerp(reaction.from,reaction.end,progress);
             if(progress>=1) advanceAction();
           }
+          const edgeInput=(point,size)=>U.clamp((30-point)/30,0,1)-U.clamp((point-size+30)/30,0,1);
+          const atEdge=drag?.inside&&!drag.hit;
+          const edgeX=atEdge?edgeInput(drag.pointer.x,width):0,edgeY=atEdge?edgeInput(drag.pointer.y,height):0;
+          const scrolling=edgeX!==0||edgeY!==0;
+          if(scrolling) {
+            const speed=.32*Math.min(24,Math.max(0,at-lastFrame));
+            panCanvas(edgeX*speed,edgeY*speed);
+          }
+          lastFrame=at;
           positionCamera();
+          if(scrolling) updateDragPosition();
           model(at);
           if(loose){
             const group=apparatus.get(loose.slot.id);
@@ -1900,13 +1964,13 @@
             if(currentAction()?.kind==='preheat'&&!reaction) layoutPreheat();
             else layoutAction();
           } else layoutTargets();
-          if(reaction||assembled&&step===4&&currentAction()?.start===bubblesReadyAt) request();
+          if(scrolling||reaction||assembled&&step===4&&currentAction()?.start===bubblesReadyAt) request();
         }
         function request(){if(!raf) raf=requestAnimationFrame(frame);}
         scene.add(pitcher);
         lampGroup.add(matchBox,match,lampCap);
         phase=0;
-        for(const name of ['orbit','zoom-in','zoom-out','home']) el(name).disabled=false;
+        for(const name of ['pan','orbit','zoom-in','zoom-out','home']) el(name).disabled=false;
         updateAssembly();
         assemblyNote('当前：'+nextInstrument().name+'。');
         el('fallback').hidden=true;
