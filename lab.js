@@ -117,10 +117,11 @@
         const steelLight=standard(p=>mix(p.muted,p.bg,.45),{metalness:.17,roughness:.28});
         const rubber=standard(p=>mix(p.fg,p.muted,.22),{roughness:.75});
         const floor = flat(p=>mix(p.bg,p.muted,p.light?.075:.12),{transparent:true,opacity:.72});
-        box(10.45,.062,3.95,floor,-.05,-.045,.04);
+        const bench={left:-5.35,right:5.45,back:-3.20,front:2.05};
+        box(bench.right-bench.left,.062,bench.front-bench.back,floor,(bench.left+bench.right)/2,-.045,(bench.back+bench.front)/2);
         const grid = [];
-        for(let x=-5;x<=5;x+=.5) grid.push(x,-.009,-1.88,x,-.009,1.96);
-        for(let z=-1.75;z<=1.9;z+=.5) grid.push(-5.15,-.009,z,5.06,-.009,z);
+        for(let x=-5;x<=5;x+=.5) grid.push(x,-.009,bench.back+.07,x,-.009,bench.front-.07);
+        for(let z=-3;z<=2;z+=.5) grid.push(bench.left+.07,-.009,z,bench.right-.07,-.009,z);
         const gridMat=color(new T.LineBasicMaterial({transparent:true,opacity:.2}),p=>p.muted);
         const gridGeo=new T.BufferGeometry();
         gridGeo.setAttribute('position',new T.Float32BufferAttribute(grid,3));
@@ -1093,7 +1094,7 @@
         }
         parts.forEach(p=>p.btn.addEventListener('click',()=>selectPart(selected===p.index?-1:p.index)));
 
-        const target=V(-.26,1.69,.07);
+        const target=V(-.06,1.69,.07);
         const home={az:.25,tilt:.295,zoom:1};
         let az=home.az,tilt=home.tilt,zoom=home.zoom, width=0,height=0;
         const resetView=()=>{az=home.az;tilt=home.tilt;zoom=1;request();};
@@ -1102,7 +1103,7 @@
           camera.position.set(target.x+radius*Math.sin(az)*Math.cos(tilt),
             target.y+radius*Math.sin(tilt),target.z+radius*Math.cos(az)*Math.cos(tilt));
           camera.lookAt(target);
-          const xo=Math.max(5.84,2.94*width/height)/zoom, yo=xo*height/width;
+          const xo=Math.max(6.32,2.94*width/height)/zoom, yo=xo*height/width;
           camera.left=-xo;camera.right=xo;camera.top=yo;camera.bottom=-yo;
           camera.updateProjectionMatrix();
           camera.updateMatrixWorld();
@@ -1361,13 +1362,6 @@
         const drawPoint=(point,[x,y])=>{
           point.setAttribute('cx',x);point.setAttribute('cy',y);
         };
-        const actionLeaders=guideSvg('lab-action-leaders');
-        const actionMarkers=['source','destination'].map(role=>{
-          const line=guideElement(actionLeaders,'line'), point=guideElement(actionLeaders,'circle');
-          point.setAttribute('r',2.5);
-          point.dataset.actionAnchor=role;
-          return {line,point};
-        });
         const preheatTrack=guideSvg('lab-preheat-rail');
         const preheatLine=guideElement(preheatTrack,'line');
         const preheatEdges=['left','right'].map(edge=>{
@@ -1376,7 +1370,7 @@
           point.dataset.preheatEdge=edge;
           return point;
         });
-        actionOverlay.append(preheatTrack,actionLine,actionLeaders,actionSource,actionDestination,actionHint);
+        actionOverlay.append(preheatTrack,actionLine,actionSource,actionDestination,actionHint);
         window.lucide?.createIcons();
         const verificationStep=procedure.length;
         const finished=()=>step>=verificationStep&&!(step===verificationStep&&verifying);
@@ -1404,7 +1398,6 @@
           actionOverlay.dataset.kind=preheating?'preheat':manual?'drag':'observe';
           actionSource.hidden=!manual;
           actionDestination.hidden=actionLine.hidden=!manual||preheating;
-          actionLeaders.toggleAttribute('hidden',!manual||preheating);
           preheatTrack.toggleAttribute('hidden',!preheating);
           actionDestination.classList.toggle('is-near',manual&&heldSource);
           actionSource.setAttribute('aria-pressed',String(heldSource));
@@ -1495,31 +1488,22 @@
           actionSource.style.left=handle[0]+'px';actionSource.style.top=handle[1]+'px';
           preheatGuide={ux,uy,span,sourcePoint:coords(lampGrip.clone().setX(preheatX))};
         }
-        function offsetActionMarkers(points,margin){
-          const clampPoint=([x,y])=>[U.clamp(x,margin,width-margin),U.clamp(y,margin,height-margin)];
-          const distance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
-          const candidates=(origin,side)=>[
-            [side*28,20],[side*32,-15],[-side*28,20],[-side*32,-15],
-            [0,36],[0,-36],[side*49,0],[-side*49,0]
-          ].map(([dx,dy])=>clampPoint([origin[0]+dx,origin[1]+dy]));
-          const side=points[0][0]<=points[1][0]?-1:1;
-          let best,score=Infinity;
-          for(const a of candidates(points[0],side)) for(const b of candidates(points[1],-side)){
-            const overlap=Math.max(0,49-distance(a,b));
-            const cover=[a,b].reduce((total,p)=>total+points.reduce((n,anchor)=>n+Math.max(0,24-distance(anchor,p)),0),0);
-            const cost=overlap*20+cover*4+distance(a,points[0])+distance(b,points[1]);
-            if(cost<score){score=cost;best=[a,b];}
-          }
-          return best;
-        }
         function layoutAction(){
           const op=currentAction(), margin=24;
-          const placePoint=(p)=>{const [x,y]=coords(p);return [U.clamp(x,3,width-3),U.clamp(y,3,height-3)];};
+          const placePoint=(p)=>{const [x,y]=coords(p);return [U.clamp(x,margin,width-margin),U.clamp(y,margin,height-margin)];};
           actionHint.style.left='10px';
           actionHint.style.top='10px';
           if(!op?.source||op.kind==='preheat'||reaction) return;
-          const sourcePoint=placePoint(op.from), targetPoint=placePoint(op.to);
-          const [a,b]=offsetActionMarkers([sourcePoint,targetPoint],margin);
+          const sourcePoint=placePoint(op.from), b=placePoint(op.to);
+          const a=step===0
+            ? [U.clamp(sourcePoint[0]+(width<520?35:46),margin,width-margin),Math.max(margin,sourcePoint[1]-13)]
+            : sourcePoint;
+          if(Math.hypot(b[0]-a[0],b[1]-a[1])<49){
+            const choices=[[a[0]+52,a[1]],[a[0]-52,a[1]],[a[0],a[1]+52],[a[0],a[1]-52]];
+            const valid=choices.filter(([x,y])=>x>=margin&&x<=width-margin&&y>=margin&&y<=height-margin);
+            valid.sort((c,d)=>Math.hypot(c[0]-b[0],c[1]-b[1])-Math.hypot(d[0]-b[0],d[1]-b[1]));
+            if(valid.length) [b[0],b[1]]=valid[0];
+          }
           const hintW=actionHint.offsetWidth,hintH=actionHint.offsetHeight;
           const corners=[[10,10],[width-hintW-10,10],[10,height-hintH-10],[width-hintW-10,height-hintH-10]];
           const crowd=([left,top])=>[a,b].filter(([x,y])=>x+26>left&&x-26<left+hintW&&y+26>top&&y-26<top+hintH).length;
@@ -1529,18 +1513,11 @@
           for(const [btn,[x,y]] of [[actionSource,visibleSource],[actionDestination,b]]){
             btn.style.left=x+'px';btn.style.top=y+'px';
           }
-          [sourcePoint,targetPoint].forEach((point,i)=>{
-            const marker=actionMarkers[i];
-            drawPoint(marker.point,point);
-            drawGuide(marker.line,i===0?visibleSource:b,point);
-          });
-          actionMarkers[0].line.style.display=actionTouch?.point?'none':'';
-          actionMarkers[0].point.style.display=actionTouch?.point?'none':'';
           const dx=b[0]-visibleSource[0],dy=b[1]-visibleSource[1];
           actionLine.style.left=visibleSource[0]+'px';actionLine.style.top=visibleSource[1]+'px';
           actionLine.style.width=Math.hypot(dx,dy)+'px';
           actionLine.style.transform='rotate('+Math.atan2(dy,dx)+'rad)';
-          return {a,b,sourcePoint,targetPoint};
+          return {a,b,sourcePoint};
         }
         function clearActionDrag(){
           actionTouch=null;
@@ -1561,10 +1538,10 @@
           }
           const path=layoutAction();
           if(!path) return false;
-          if(!handle&&Math.hypot(x-path.sourcePoint[0],y-path.sourcePoint[1])>29) return false;
+          if(!handle&&Math.hypot(x-path.sourcePoint[0],y-path.sourcePoint[1])>39) return false;
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
-          actionTouch={id:e.pointerId,x,y,...path,handle,point:null,near:false};
+          actionTouch={id:e.pointerId,x,y,...path,point:null,near:false};
           return true;
         }
         function actionPointerMove(e){
@@ -1582,15 +1559,10 @@
           }
           if(!f.point&&Math.hypot(x-f.x,y-f.y)<5) return;
           actionOverlay.dataset.dragging='';
-          const op=currentAction(), anchor=f.handle?f.a:f.sourcePoint;
-          const px=anchor[0]+x-f.x,py=anchor[1]+y-f.y;
-          const badgeDistance=Math.hypot(x-f.b[0],y-f.b[1]);
-          const pointDistance=Math.hypot(x-f.targetPoint[0],y-f.targetPoint[1]);
-          const target=badgeDistance<pointDistance?f.b:f.targetPoint;
-          const dx=target[0]-f.x,dy=target[1]-f.y;
-          const movement=Math.hypot(x-f.x,y-f.y);
-          const progress=dx*dx+dy*dy>16?U.clamp(((x-f.x)*dx+(y-f.y)*dy)/(dx*dx+dy*dy),0,1):0;
-          f.near=movement>10&&(badgeDistance<24||pointDistance<19)&&progress>.62;
+          const op=currentAction(), dx=f.b[0]-f.a[0],dy=f.b[1]-f.a[1];
+          const px=f.a[0]+x-f.x,py=f.a[1]+y-f.y;
+          const progress=U.clamp(((px-f.a[0])*dx+(py-f.a[1])*dy)/(dx*dx+dy*dy),0,1);
+          f.near=Math.hypot(px-f.b[0],py-f.b[1])<31&&progress>.62;
           f.point=[U.clamp(px,24,width-24),U.clamp(py,24,height-24)];
           actionDestination.classList.toggle('is-near',f.near);
           time=U.lerp(op.start,op.end,progress);
