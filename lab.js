@@ -160,10 +160,12 @@
         cyl(.082,.082,3.25,steel,standX,1.92,standZ);
         cyl(.092,.092,.055,steelLight,standX,3.555,standZ);
         const clampX=-2.75, clampY=2.43, tubeZ=.32;
-        box(.37,.33,.32,steelDark,standX,clampY,standZ);
-        chord([standX,clampY,standZ],[clampX,clampY,-.09],.061,steelLight);
-        chord([standX-.02,clampY,standZ],[standX-.35,clampY,standZ],.062,steelLight);
-        box(.072,.217,.192,steel,standX-.355,clampY,standZ);
+        const clampMount=new T.Group();
+        scene.add(clampMount);
+        box(.37,.33,.32,steelDark,standX,clampY,standZ,clampMount);
+        chord([standX,clampY,standZ],[clampX,clampY,-.09],.061,steelLight,clampMount);
+        chord([standX-.02,clampY,standZ],[standX-.35,clampY,standZ],.062,steelLight,clampMount);
+        box(.072,.217,.192,steel,standX-.355,clampY,standZ,clampMount);
         const standGroup=finishInstrument('stand');
 
         const closed=V(-4.27,2.6,tubeZ), mouth=V(-.64,2.25,tubeZ);
@@ -274,7 +276,7 @@
         chute.visible=false;
         payload.forEach(p=>{p.grain.visible=false;});
         tube.updateMatrixWorld(true);
-        standGroup.attach(clampCollar);
+        clampMount.attach(clampCollar);
         finishInstrument('tube');
         const lampX=-3.88, lampZ=.31;
         const burnerSeat=.867, wickTip=1.105;
@@ -351,7 +353,10 @@
         lathe([[0,.123],[.044,.175],[.074,.247],[.078,.331],[.064,.416],[.039,.511],[.017,.592],[0,.662]],
           coreFlame,0,0,0,flame,8);
         flame.visible=false;
-        finishInstrument('lamp');
+        const lampGroup=finishInstrument('lamp');
+        const lampBodyGroup=new T.Group();
+        lampBodyGroup.add(...lampGroup.children);
+        lampGroup.add(lampBodyGroup);
 
         // Rounded bends preserve a connected passage into the mouth of the inverted jar.
         const bent = points => {
@@ -383,16 +388,17 @@
         function pipePiece(from,to,radius,material,order) {
           return mesh(new T.TubeGeometry(new PipeSection(from,to),64,radius,16,false),material,0,0,0,scene,order);
         }
-        pipePiece(0,sleeveStart,.086,pipeGlass,7);
+        const inletPipe=pipePiece(0,sleeveStart,.086,pipeGlass,7);
         const collectorTube=pipePiece(sleeveEnd,1,.086,pipeGlass,7);
         const sleeveMat=standard(p=>mix(p.heat,p.bg,p.light?.33:.17),{roughness:.76});
-        pipePiece(sleeveStart,sleeveEnd,.116,sleeveMat,0);
+        const rubberJoint=pipePiece(sleeveStart,sleeveEnd,.116,sleeveMat,0);
         const sleeveEdge=standard(p=>mix(p.heat,p.fg,.24),{roughness:.63});
-        for(const t of [sleeveStart,sleeveEnd]){
+        const sleeveCollars=[sleeveStart,sleeveEnd].map(t=>{
           const point=pipeRoute.getPoint(t);
-          torus(.101,.014,sleeveEdge,point.x,point.y,point.z).quaternion
-            .setFromUnitVectors(V(0,0,1),pipeRoute.getTangent(t));
-        }
+          const collar=torus(.101,.014,sleeveEdge,point.x,point.y,point.z);
+          collar.quaternion.setFromUnitVectors(V(0,0,1),pipeRoute.getTangent(t));
+          return collar;
+        });
         const outlet=torus(.077,.014,glassRim,2.68,.72,.32,scene,8);
         outlet.rotation.x=Math.PI/2;
         const alternatePipe=(points)=>{
@@ -408,6 +414,30 @@
         const dryPipe=alternatePipe([V(1.99,1.12,-.02),V(2.91,1.05,-.34)]);
         const pipeGroup=finishInstrument('pipe');
         for(const piece of [stopper,stopperLip,holeEdge]) pipeGroup.attach(piece);
+        const proximalPipe=new T.Group();
+        proximalPipe.add(inletPipe,sleeveCollars[0],stopper,stopperLip,holeEdge);
+        const distalPipe=new T.Group();
+        distalPipe.add(collectorTube,outlet,bathPipe.segment,bathPipe.ring,dryPipe.segment,dryPipe.ring);
+        pipeGroup.add(proximalPipe,distalPipe);
+        const sleeveInlet=pipeRoute.getPoint(sleeveStart), sleeveOutlet=pipeRoute.getPoint(sleeveEnd);
+        const inletTangent=pipeRoute.getTangent(sleeveStart), outletTangent=pipeRoute.getTangent(sleeveEnd);
+        const sleeveMidpoint=pipeRoute.getPoint((sleeveStart+sleeveEnd)/2);
+        const jointStart=V(Infinity,Infinity,Infinity), jointEnd=jointStart.clone(), jointEntry=jointStart.clone();
+        function updateTankConnection(){
+          const start=sleeveInlet.clone().applyQuaternion(proximalPipe.quaternion).add(proximalPipe.position);
+          const entry=inletTangent.clone().applyQuaternion(proximalPipe.quaternion);
+          const end=sleeveOutlet.clone();
+          if(jointStart.equals(start)&&jointEnd.equals(end)&&jointEntry.equals(entry)) return;
+          jointStart.copy(start);jointEnd.copy(end);jointEntry.copy(entry);
+          const handle=Math.min(.27,start.distanceTo(end)*.32);
+          // The glass segments are rigid; only the rubber between them changes shape.
+          const joint=new T.CubicBezierCurve3(start,start.clone().addScaledVector(entry,handle),
+            end.clone().addScaledVector(outletTangent,-handle),end);
+          rubberJoint.geometry.dispose();
+          rubberJoint.geometry=new T.TubeGeometry(joint,40,.116,16,false);
+          sleeveCollars[1].position.copy(end);
+          joint.getPoint(.5,sleeveMidpoint);
+        }
 
         const tankX = 2.27, tankZ = .28, jarX = 2.68, jarZ = .32;
         shade(2.6,.33,2.25,1.5);
@@ -475,8 +505,8 @@
         for (const [rad, y, thickness] of [[.576, .494, .022], [.595, .589, .012], [.685, 3.358, .014]]) {
           torus(rad, thickness, labEdge, jarX, y, jarZ,scene,4).rotation.x=Math.PI/2;
         }
-        const jarWaterMaterial = new T.MeshBasicMaterial({
-          color: waterTint, opacity: .24, transparent: true, depthWrite: false, side: T.FrontSide
+        const jarWaterMaterial = flat(waterTint, {
+          opacity: .24, transparent: true, depthWrite: false, side: T.FrontSide
         });
         const jarSurfaceMaterial = flat(p=>mix(p.water,p.oxygen,.2),{ opacity: .46, transparent: true,
           depthWrite: false, side: T.DoubleSide
@@ -512,13 +542,9 @@
           const theta = col / waterColumns * Math.PI * 2;
           return [Math.sin(theta), Math.cos(theta)];
         });
-        let lastJarLevel;
-        function updateJar(progress) {
-          const height = T.MathUtils.lerp(3.23, .78, T.MathUtils.clamp(progress, 0, 1));
-          if (height === lastJarLevel) return;
-          lastJarLevel = height;
+        function updateJar(low, high, upright) {
           for (let row = 0; row <= waterSections; row++) {
-            const y = T.MathUtils.lerp(.49, height, row / waterSections);
+            const y = T.MathUtils.lerp(low, high, row / waterSections);
             const radius = jarWaterRadius(y);
             for (let col = 0; col <= waterColumns; col++) {
               const [sx, cz] = jarWaterAngles[col];
@@ -526,12 +552,13 @@
             }
           }
           jarWaterPositions.needsUpdate = true;
+          const height = upright ? low : high;
           const radius = jarWaterRadius(height);
           jarSurface.position.y = meniscus.position.y = height;
           jarSurface.scale.set(radius, 1, radius);
           meniscus.scale.set(radius, radius, 1);
         }
-        updateJar(0);
+        updateJar(.49, 3.23, false);
         const jarGroup=finishInstrument('jar');
         const lid=mesh(new T.CylinderGeometry(.648,.648,.034,56),glassEdge,jarX,.45,jarZ,jarGroup,9);
         const lidRim=torus(.642,.013,glassRim,jarX,.448,jarZ,jarGroup,10);
@@ -627,9 +654,34 @@
           scene.add(group);
           return group;
         }
-        const match=stick(), splint=stick();
+        const splint=stick();
         const splintFlame=lathe([[0,0],[.055,.025],[.094,.13],[.065,.28],[0,.52]],flameMat,0,.005,0,splint,10);
         splintFlame.visible=false;
+        const matchBoxCenter=V(lampX-1.03,.14,lampZ+.72), matchBox=new T.Group();
+        matchBox.position.copy(matchBoxCenter);
+        const cardboard=standard(p=>mix(p.bg,p.yellow,.43),{roughness:.95});
+        const matchLabel=standard(p=>mix(p.heat,p.fg,.36),{roughness:.88});
+        const strikeStrip=standard(()=>new T.Color(0x703f34),{roughness:1});
+        const grit=standard(()=>new T.Color(0xbd8666),{roughness:1});
+        box(.89,.23,.52,cardboard,0,0,0,matchBox);
+        box(.73,.005,.40,matchLabel,0,.117,0,matchBox);
+        box(.80,.125,.009,strikeStrip,0,-.009,.264,matchBox);
+        for(let i=0;i<18;i++){
+          box(.012+(i%3)*.005,.013,.004,grit,-.375+i*.044,-.045+(i%4)*.024,.270,matchBox);
+        }
+        const match=new T.Group(), matchShaft=new T.Group(), matchFire=new T.Group();
+        match.add(matchShaft,matchFire);
+        const matchwood=standard(p=>mix(p.bg,p.yellow,.57),{roughness:.9});
+        const unstruck=standard(()=>new T.Color(0x963627),{roughness:.88});
+        const charred=standard(()=>new T.Color(0x412524),{roughness:1});
+        box(.052,.76,.048,matchwood,0,.37,0,matchShaft);
+        const matchHead=mesh(new T.SphereGeometry(.064,14,9),unstruck,0,.01,0,matchShaft);
+        matchHead.scale.set(.91,1.19,.86);
+        lathe([[0,0],[.067,.036],[.089,.10],[.073,.20],[.042,.27],[0,.38]],flameMat,0,-.005,0,matchFire,10);
+        lathe([[0,0],[.044,.031],[.045,.085],[.022,.175],[0,.21]],coreFlame,0,-.008,0,matchFire,11);
+        const sparkMaterial=flat(()=>new T.Color(0xffad29),{depthWrite:false});
+        const sparkShape=new T.SphereGeometry(1,6,5);
+        const matchSparks=Array.from({length:7},()=>mesh(sparkShape,sparkMaterial,0,0,0,match,12));
         const tubeBase=tube.quaternion.clone();
         const U=T.MathUtils, twoPi=2*Math.PI;
         const oxy=flat(p=>mix(p.oxygen,p.bg,.17),{transparent:true,opacity:.93,depthWrite:false});
@@ -972,17 +1024,16 @@
 
         let selected=-1, phase=-1, step=0;
         const procedure = [
-          ['检查气密性','检查气密性','将导管口浸入水中，用热毛巾微热空试管。导管口冒出气泡，说明装置气密性良好。',2.65],
-          ['用纸槽装药并放棉花','用纸槽装药','横放干燥试管，把盛有少量高锰酸钾的纸槽送到管底。抬高管口使药品滑落，抽出纸槽，再在管口内侧放一团疏松棉花。',6.2],
-          ['塞紧并调整试管','塞紧并调整试管','塞紧橡胶塞，使试管口略向下倾斜，并将导管口伸入水中。',1.75],
-          ['点燃酒精灯','点燃酒精灯','点燃酒精灯，给装有高锰酸钾的试管加热。',1.95],
-          ['排水集气','开始排水集气','待气泡连续、均匀冒出后，把导管移到装满水的倒置集气瓶口。集满后，在水下盖好玻璃片，再取出集气瓶。',13.4],
-          ['移出导管','移出导管','把导管移出水槽。此时酒精灯仍在燃烧。',1.6],
-          ['熄灭酒精灯','熄灭酒精灯','用灯帽盖灭酒精灯。先移出导管，再停止加热，可防止水倒吸进试管。',1.65],
-          ['检验氧气','检验氧气','移开玻璃片，将带火星的小木条伸入集气瓶。木条复燃，说明收集到了氧气。',2.9]
+          ['查','检查气密性','将导管口浸入水中，用热毛巾微热空试管。导管口冒出气泡，说明装置气密性良好。'],
+          ['装','装药和棉花','横放干燥试管，把盛有少量高锰酸钾的纸槽送到管底。抬高管口使药品滑落，抽出纸槽，再在管口内侧放一团疏松棉花。'],
+          ['定','固定装置','塞紧橡胶塞，将试管口略向下固定，调整试管高度，使酒精灯外焰能加热试管。先把导管口放入水中。'],
+          ['点','点灯、预热','划燃火柴并点燃酒精灯。移动酒精灯来回预热试管，再用外焰对准药品所在部位加热。'],
+          ['收','排水集气','给集气瓶装满水并盖好玻璃片，再倒置在水槽中，在水下移开玻璃片。等导管口的气泡连续、均匀后再收集。集满后在水下盖好玻璃片，取出并正放在实验桌上。'],
+          ['离','移出导管','把导管移出水槽。此时酒精灯仍在燃烧。'],
+          ['熄','熄灭酒精灯','用灯帽盖灭酒精灯。先移出导管，再停止加热，可防止水倒吸进试管。']
         ];
         const proc=el('procedure');
-        const procRows=procedure.map(([label],i)=>{
+        const procRows=procedure.map(([label,name],i)=>{
           const li=document.createElement('li');
           const row=document.createElement('span');
           row.className='step-row';
@@ -991,7 +1042,7 @@
           number.textContent=String(i+1).padStart(2,'0');
           const title=document.createElement('span');
           title.className='step-label';
-          title.textContent=label;
+          title.textContent=label+' · '+name;
           row.append(number,title);
           li.append(row);
           proc?.append(li);
@@ -1004,7 +1055,7 @@
             if(current) li.setAttribute('aria-current','step'); else li.removeAttribute('aria-current');
           });
           const detail=el('step-detail');
-          if(detail) detail.textContent=!assembled?'':step===procedure.length?'带火星的小木条复燃，证明收集到的是氧气。':procedure[step][2];
+          if(detail) detail.textContent=!assembled?'':procedure[step]?.[2]??(step===8?'带火星的小木条复燃，证明收集到的是氧气。':'已先移出导管，再盖灭酒精灯。集气瓶已盖好玻璃片，正放在实验桌上。');
         }
         const feedback=[
           '准备检查气密性。',
@@ -1021,7 +1072,12 @@
           '带火星的小木条复燃，检验为氧气。',
           '横放干燥试管，用纸槽把高锰酸钾送到管底。',
           '抬高试管口，让高锰酸钾从纸槽滑落到管底。',
-          '抽出纸槽，在试管口内侧放一团疏松棉花。'
+          '抽出纸槽，在试管口内侧放一团疏松棉花。',
+          '已调好试管高度，外焰对准试管底部。',
+          '来回移动酒精灯预热试管，再集中加热药品部位。',
+          '先把集气瓶装满水，盖好玻璃片后再倒置入水槽。',
+          '已在水下移开玻璃片。先观察导管口，气泡连续、均匀后再收集。',
+          '集气瓶已盖好玻璃片，正放在实验桌上。'
         ];
         function updateNote() {
           const part=parts[selected];
@@ -1154,9 +1210,10 @@
         });
         ['pointerup','pointercancel','lostpointercapture'].forEach(evt=>canvas.addEventListener(evt,e=>fingers.delete(e.pointerId)));
 
-        const fillStart=3, fillEnd=10.75, capAt=11.60, liftAt=12.90;
+        const waterFullAt=1.5, prepCapAt=2.25, immerseAt=3.85, uncoverAt=4.64;
+        const bubblesReadyAt=8.24, fillStart=8.89, fillEnd=16.64, outletClearAt=17.24, capAt=18.05, liftAt=19.65;
         const seedPoint=V(-4.11,2.49,.32);
-        let time=0,raf=0,currentWater, actionIndex=0, actionTouch=null, reaction=null, heldSource=false;
+        let time=0,raf=0,steadyAt=0,actionIndex=0,actionTouch=null,reaction=null,heldSource=false;
         const reduced=matchMedia('(prefers-reduced-motion: reduce)');
         const lampCap=lathe([[.209,0],[.225,.007],[.226,.025],[.214,.039],[.208,.067],[.199,.26],
           [.190,.319],[.167,.376],[.133,.411],[.081,.440],[.031,.450],[0,.451],[0,.420],
@@ -1164,28 +1221,49 @@
           porcelain,lampX,burnerSeat,lampZ);
         lampCap.name='Porcelain snuffer cap';
         lampCap.visible=false;
-        const laterJar=V(3.83,0,-1.34), zAxis=V(0,0,1);
+        const laterJar=V(4.04,0,-2.03), zAxis=V(0,0,1);
         const originalJarPin=parts[3].xyz.clone();
-        const waterParts=[jarWaterMesh,jarSurface,meniscus];
+        const originalLampPin=parts[4].xyz.clone();
+        const tubePins=[0,7].map(i=>[i,parts[i].xyz.clone().sub(closed)]);
+        const inletPins=[1,2].map(i=>[i,parts[i].xyz.clone()]);
         const scope=(i,t)=>step>i||(step===i&&time>=t);
         const towelStart=V(-2.94,3.62,.60), towelEnd=V(-3.92,2.90,.32);
-        const mouthWet=V(jarX,.71,jarZ), wick=V(lampX-.012,wickTip,lampZ), lampRest=V(lampX+.79,1.8,lampZ+.24);
+        const mouthWet=V(jarX,.71,jarZ), wick=V(lampX-.012,wickTip,lampZ);
+        const tiltStart=.83, tiltEnd=1.04, heightAt=1.86, dipAt=2.55;
+        const strikeAt=1.10, litAt=2.12, matchAwayAt=2.92, preheatTo=3.83, preheatedAt=7.23, heatingAt=8.18;
+        const hotOuterFlameY=flame.position.y+.90;
+        const matchStripStart=matchBoxCenter.clone().add(V(-.34,-.01,.322));
+        const matchStripEnd=matchBoxCenter.clone().add(V(.34,-.01,.322));
+        const matchStart=matchStripStart.clone().add(V(-.17,.36,.16));
+        const matchDiscard=matchBoxCenter.clone().add(V(.30,-.064,.54));
+        const alignedWick=wick.clone();
+        const clampGrip=V(standX,clampY,standZ);
+        const heightGripTarget=clampGrip.clone();
+        const lampGrip=V(lampX,.61,lampZ), preheatGrip=lampGrip.clone();
+        const capSeatGrip=V(lampX,burnerSeat+.22,lampZ);
         const capRest=V(lampX+.85,.07,lampZ+.51);
         const jarPark=V(laterJar.x,2.35,laterJar.z), jarBath=V(jarX,2.18,jarZ);
         const testMouth=V(laterJar.x,3.01,laterJar.z);
-        const waterPlateRest=V(.85,1.41,1.45);
+        const jarMouthWet=V(jarX,.45,jarZ), waterPlateRest=V(1.2,.205,.70);
+        const prepPlateRest=testMouth.clone().add(V(-1.15,-2.91,.31));
+        const pitcherRest=testMouth.clone().add(V(1.08,-2.91,.21));
+        const pitcherPour=testMouth.clone().add(V(.54,.44,.08));
         const plateRest=V(laterJar.x-1.12,3.3,laterJar.z+.45);
         const splintRest=V(laterJar.x-1.18,3.53,laterJar.z+.27);
         const mouthPoint=mouth.clone().add(V(0,.09,.12)), cottonStart=mouthPoint.clone().add(V(.88,.40,.1));
         const carriedPlate=cyl(.647,.647,.038,glassEdge,0,0,0,scene,9);
         const carryRim=torus(.643,.016,glassRim,0,0,0,carriedPlate,10);
         carryRim.rotation.x=Math.PI/2;
-        const morphTube=mesh(new T.BufferGeometry(),pipeGlass,0,0,0,pipeGroup,7);
-        const morphTip=torus(.077,.014,glassRim,0,0,0,pipeGroup,8);
+        const pitcher=new T.Group();
+        lathe([[0,0],[.34,0],[.35,.04],[.39,.74],[.37,.78],[.35,.76],[.31,.09],[0,.07]],jarGlass,0,0,0,pitcher,3);
+        const pitcherWater=cyl(.352,.316,.53,flat(waterTint,{transparent:true,opacity:.36,depthWrite:false}),0,.33,0,pitcher,2);
+        const pourStream=cyl(.037,.044,1,flat(waterTint,{transparent:true,opacity:.72,depthWrite:false}),0,0,0,scene,6);
+        const morphTube=mesh(new T.BufferGeometry(),pipeGlass,0,0,0,distalPipe,7);
+        const morphTip=torus(.077,.014,glassRim,0,0,0,distalPipe,8);
         const wetPipe=new PipeSection(sleeveEnd,1);
         const jarPivot=V(jarX,1.735,jarZ);
         const jarRestPivot=V(laterJar.x,1.735,laterJar.z);
-        let tubePose='';
+        let tubePose='', outletBlend;
         function bendOutlet(from,to,progress,pose){
           const quantized=Math.round(U.clamp(progress,0,1)*24)/24;
           const state=pose+quantized;
@@ -1193,13 +1271,14 @@
           tubePose=state;
           const blend=new T.Curve();
           blend.getPoint=(t,target=V(0,0,0))=>target.copy(from.getPoint(t)).lerp(to.getPoint(t),quantized);
+          outletBlend=blend;
           morphTube.geometry.dispose();
           morphTube.geometry=new T.TubeGeometry(blend,38,.086,13,false);
           morphTip.position.copy(blend.getPoint(1));
           morphTip.quaternion.setFromUnitVectors(zAxis,blend.getTangent(1));
         }
         const grip=(source,destination,from,to,start,end,hint,finish=end)=>({source,destination,from,to,start,end,finish,hint});
-        const observe=(start,end,hint)=>({start,end,hint});
+        const observe=(start,end,hint,seconds)=>({start,end,hint,seconds});
         const actions=[
           [grip('热毛巾','试管底部',towelStart,towelEnd,0,.74,'把热毛巾移到空试管底部，观察水中导管口。',2.30)],
           [
@@ -1209,21 +1288,32 @@
             grip('棉花','试管口内侧',cottonStart,mouthPoint,4.83,5.56,'把疏松棉花放在试管口内侧。',6.20)
           ],
           [
-            grip('橡胶塞','试管口',mouthPoint.clone().add(V(.82,.35,.34)),mouthPoint,0,.83,'将橡胶塞推入试管口。'),
-            grip('试管口','略向下的位置',mouthPoint.clone().add(V(0,.33,0)),mouthPoint.clone().add(V(0,-.26,0)),.83,1.04,'把试管口调至略向下。'),
-            grip('导管末端','水面下',dryPipe.end,bathPipe.end,1.04,1.75,'把导管口放到水面下。')
+            grip('橡胶塞','试管口',mouthPoint.clone().add(V(.82,.35,.34)),mouthPoint.clone().add(V(0,.29,0)),0,tiltStart,'将橡胶塞推入试管口。'),
+            grip('试管口','略向下的位置',mouthPoint.clone().add(V(0,.33,0)),mouthPoint.clone().add(V(0,-.26,0)),tiltStart,tiltEnd,'把试管口调至略向下。'),
+            grip('铁夹','外焰加热高度',clampGrip,heightGripTarget,tiltEnd,heightAt,'调整铁夹高度，使酒精灯外焰能接触试管底部。'),
+            grip('导管末端','水面下',dryPipe.end,bathPipe.end,heightAt,dipAt,'先把导管口放到水面下，暂不伸入集气瓶。')
           ],
-          [grip('火柴','酒精灯灯芯',lampRest,wick,0,.77,'把燃着的火柴移到灯芯，点燃酒精灯。',1.40)],
           [
-            observe(0,2.20,'先观察水槽：导管口的气泡逐渐变得连续、均匀。'),
-            grip('装满水的集气瓶','水槽内的倒置位置',jarPark,jarBath,2.20,2.78,'把装满水的集气瓶倒扣在水槽里。'),
-            grip('导管末端','倒置的集气瓶口',bathPipe.end,mouthWet,2.78,3,'把导管移到倒置集气瓶口下。'),
-            observe(3,10.75,'氧气正在排出瓶内的水。观察气泡和水位。'),
-            grip('玻璃片','水中的集气瓶口',waterPlateRest,mouthWet,fillEnd,capAt,'集气完成。在水下用玻璃片盖住瓶口。'),
-            grip('集气瓶','水槽旁的台面',jarBath,jarPark,11.60,12.90,'把盖好玻璃片的集气瓶取出，放到水槽旁。')
+            grip('火柴','火柴盒擦火面',matchStart,matchStripEnd,0,strikeAt,'用火柴头划过火柴盒侧面的擦火条。'),
+            grip('燃着的火柴','酒精灯灯芯',matchStripEnd,alignedWick,strikeAt,litAt,'用划燃的火柴点燃酒精灯灯芯。',matchAwayAt),
+            grip('酒精灯','试管中部下方',lampGrip,preheatGrip,matchAwayAt,preheatTo,'移动已点燃的酒精灯，开始给试管预热。'),
+            observe(preheatTo,preheatedAt,'酒精灯沿试管来回移动，使试管均匀受热。',3.4),
+            grip('酒精灯','装药一端的下方',preheatGrip,lampGrip,preheatedAt,heatingAt,'预热后将酒精灯移回装药处，用外焰集中加热。')
+          ],
+          [
+            grip('盛水容器','集气瓶口',pitcherRest.clone().add(V(0,.56,0)),testMouth,0,waterFullAt,'往正放的集气瓶里加水，直到装满。'),
+            grip('玻璃片','桌上的集气瓶口',prepPlateRest,testMouth,waterFullAt,prepCapAt,'用玻璃片盖严装满水的集气瓶。'),
+            grip('盖好玻璃片的集气瓶','水槽内的倒置位置',jarPark,jarBath,prepCapAt,immerseAt,'按住玻璃片，把装满水的集气瓶倒置在水槽里。'),
+            grip('水下的玻璃片','瓶口旁的水槽底',jarMouthWet,waterPlateRest,immerseAt,uncoverAt,'确认瓶口浸在水下，再移开玻璃片。'),
+            observe(uncoverAt,bubblesReadyAt,'观察水槽中的导管口：气泡先零散冒出，等到连续、均匀时再收集。',3.6),
+            grip('导管末端','倒置的集气瓶口',bathPipe.end,mouthWet,bubblesReadyAt,fillStart,'气泡已连续、均匀冒出。把导管移到倒置的集气瓶口下。'),
+            observe(fillStart,fillEnd,'观察瓶内水位下降：氧气正在把水排出集气瓶。',5.8),
+            observe(fillEnd,outletClearAt,'集气完成。导管让开瓶口，末端仍留在水中。',.65),
+            grip('玻璃片','水中的集气瓶口',waterPlateRest,jarMouthWet,outletClearAt,capAt,'在水下用玻璃片盖住瓶口。'),
+            grip('装满氧气的集气瓶','水槽旁的实验桌面',jarBath,jarPark,capAt,liftAt,'按住玻璃片，取出集气瓶，翻转并正放在实验桌上。')
           ],
           [grip('导管末端','水面上方',bathPipe.end,dryPipe.end,0,.75,'保持酒精灯燃烧，先把导管提出水面。')],
-          [grip('灯帽','酒精灯',capRest.clone().add(V(0,.22,0)),V(lampX,burnerSeat+.22,lampZ),0,.84,'把灯帽移到灯芯上方，再盖住酒精灯。')],
+          [grip('灯帽','酒精灯',capRest.clone().add(V(0,.22,0)),capSeatGrip,0,.84,'把灯帽移到灯芯上方，再盖住酒精灯。')],
           [
             grip('玻璃片','集气瓶旁',testMouth,plateRest,0,.92,'移开盖在集气瓶口的玻璃片。'),
             grip('带火星的木条','集气瓶内',splintRest,V(laterJar.x,2.61,laterJar.z),.92,1.81,'把带火星的木条伸进集气瓶。',2.90)
@@ -1254,10 +1344,14 @@
         const actionDestination=actionButton('destination','crosshair');
         actionOverlay.append(actionLine,actionSource,actionDestination,actionHint);
         window.lucide?.createIcons();
-        const currentAction=()=>actions[step]?.[actionIndex];
+        const verificationStep=procedure.length;
+        const finished=()=>step>=verificationStep&&!(step===verificationStep&&verifying);
+        const currentAction=()=>finished()?null:actions[step]?.[actionIndex];
+        const verificationButton=el('verify-oxygen');
+        let verifying=false;
         let suppressActionClick=0;
         function resetExperiment(){
-          step=0;time=0;phase=-1;selected=-1;actionIndex=0;
+          step=0;time=0;phase=-1;selected=-1;actionIndex=0;verifying=false;steadyAt=0;
           reaction=null;actionTouch=null;heldSource=false;
           clearActionDrag();
         }
@@ -1266,6 +1360,7 @@
           const done=assembled&&!op;
           el('play').hidden=!done;
           el('play').disabled=!done;
+          verificationButton.hidden=!done||step!==verificationStep;
           actionOverlay.hidden=!assembled;
           el('lines').toggleAttribute('hidden',!done);
           if(!assembled) return;
@@ -1274,8 +1369,8 @@
           actionSource.hidden=actionDestination.hidden=actionLine.hidden=!manual;
           actionDestination.classList.toggle('is-near',manual&&heldSource);
           actionSource.setAttribute('aria-pressed',String(heldSource));
-          actionStep.textContent=done?'实验完成':('步骤 '+String(step+1).padStart(2,'0')+' · '+procedure[step][0]);
-          actionMessage.textContent=done?'带火星的木条复燃，检验为氧气。':reaction?.hint||op.hint;
+          actionStep.textContent=done?'实验完成':verifying?'检验氧气':('步骤 '+String(step+1).padStart(2,'0')+' · '+procedure[step][0]);
+          actionMessage.textContent=done?(step>verificationStep?'带火星的木条复燃，检验为氧气。':'已先移出导管，再盖灭酒精灯。'):(reaction?.hint||op.hint);
           if(manual){
             actionSource.setAttribute('aria-label','选取'+op.source);
             actionSource.title=op.source;
@@ -1291,8 +1386,9 @@
           const op=currentAction();
           if(op){
             time=op.start;
+            if(step===4&&op.start===bubblesReadyAt) steadyAt=performance.now();
             if(!op.source){
-              runReaction(op.end,step===4&&actionIndex===3?5.8:1.65);
+              runReaction(op.end,reduced.matches?.26:op.seconds??1.65);
               return;
             }
           }
@@ -1311,7 +1407,7 @@
         function acceptAction(){
           const op=currentAction();
           if(!op?.source||reaction) return;
-          const outcome=step===0?'观察导管口是否冒出气泡。':step===1&&actionIndex===1?'观察药粒滑到试管底部。':step===7&&actionIndex===1?'观察带火星的木条是否复燃。':null;
+          const outcome=step===0?'观察导管口是否冒出气泡。':step===1&&actionIndex===1?'观察药粒滑到试管底部。':step===verificationStep&&actionIndex===1?'观察带火星的木条是否复燃。':null;
           const keyboard=document.activeElement===actionDestination||document.activeElement===actionSource;
           if(op.finish===time){advanceAction();return;}
           runReaction(op.finish,reduced.matches?.20:Math.max(.19,Math.min(1.30,(op.finish-time)*.83)),outcome);
@@ -1405,58 +1501,112 @@
           else actionSource.focus({preventScroll:true});
         });
         el('play').addEventListener('click',()=>{
-          if(!assembled||step!==procedure.length) return;
+          if(!assembled||!finished()) return;
           resetExperiment();
           refreshProcedure();
           enterAction();
           actionSource.focus({preventScroll:true});
         });
-        function model() {
+        verificationButton.addEventListener('click',()=>{
+          if(!assembled||verificationButton.hidden) return;
+          verifying=true;
+          enterAction();
+          actionSource.focus({preventScroll:true});
+        });
+        function model(at) {
           const ease=(from,to)=>U.smoothstep(time,from,to);
+          const clampProgress=assembled?(step>2?1:step===2?ease(tiltEnd,heightAt):0):0;
+          const lampZCorrection=tubeZ-lampZ;
+          const lampAimZ=lampZCorrection*clampProgress;
+          const lampAimX=lampX;
+          const tubeBottomAt=x=>closed.y+axis.y*(x-closed.x)/axis.x-tubeRadius/axis.x;
+          const heatingHeight=hotOuterFlameY-tubeBottomAt(lampAimX+.03);
+          const tubeLift=heatingHeight*clampProgress;
+          const sweep=step===3&&assembled?(time<preheatTo?ease(matchAwayAt,preheatTo):time<preheatedAt
+            ?.6+.4*Math.cos((time-preheatTo)/(preheatedAt-preheatTo)*twoPi*2):1-ease(preheatedAt,heatingAt)):0;
+          const preheatTravel=-1.60-lampAimX;
+          lampBodyGroup.position.set(preheatTravel*sweep,0,lampAimZ);
+          alignedWick.copy(wick).add(V(0,.015,lampZCorrection));
+          lampGrip.z=lampZ+lampZCorrection;
+          preheatGrip.copy(lampGrip).add(V(preheatTravel,0,0));
+          capSeatGrip.z=lampGrip.z;
+          heightGripTarget.y=clampGrip.y+heatingHeight;
           const p=step<4?0:step>4?1:U.clamp((time-fillStart)/(fillEnd-fillStart),0,1);
-          if(currentWater!==p){updateJar(p);currentWater=p;}
-          const surface=U.lerp(3.23,.78,p);
-          const inBath=step===4&&time>=fillStart&&time<capAt;
+          const prep=step===4&&time<prepCapAt;
+          const waterLoaded=step===4?ease(.42,1.37):0;
+          const surface=U.lerp(3.23,.49,p);
+          const inBath=step===4&&time>=fillStart&&time<=fillEnd;
           const collected=scope(4,liftAt);
-          const jarMix=step===4?ease(2.20,2.78)*(1-ease(capAt,liftAt)):0;
+          const dippingJar=step===4&&time>=prepCapAt&&time<immerseAt;
+          const liftingJar=step===4&&time>=capAt&&time<liftAt;
+          const inTank=step===4&&time>=immerseAt&&time<capAt;
+          const movingJar=dippingJar||liftingJar;
+          const jarTravel=dippingJar?(time-prepCapAt)/(immerseAt-prepCapAt):liftingJar?1-(time-capAt)/(liftAt-capAt):inTank?1:0;
+          const jarMix=U.smoothstep(jarTravel,.20,.78);
+          const jarLift=movingJar?1.12*(U.smoothstep(jarTravel,0,.24)-U.smoothstep(jarTravel,.74,1)):0;
           if(assembled){
             jarGroup.rotation.z=Math.PI*(1-jarMix);
             jarGroup.position.copy(jarRestPivot).lerp(jarPivot,jarMix)
               .sub(jarPivot.clone().applyQuaternion(jarGroup.quaternion));
+            jarGroup.position.y+=jarLift;
             parts[3].xyz.copy(originalJarPin).applyQuaternion(jarGroup.quaternion).add(jarGroup.position);
           } else {
             jarGroup.rotation.z=0;
             jarGroup.position.set(0,0,0);
             parts[3].xyz.copy(originalJarPin);
           }
-          waterParts.forEach(o=>o.visible=!assembled||step===4&&time<liftAt&&jarMix>.66);
-          surfacePatch.visible=assembled&&jarMix<.96;
-          const hasLid=assembled&&scope(4,capAt)&&!scope(7,.04);
+          parts[4].xyz.copy(originalLampPin).add(lampBodyGroup.position);
+          const showingWater=assembled&&step===4&&waterLoaded>0&&p<1;
+          if(showingWater) updateJar(prep?U.lerp(3.23,.49,waterLoaded):.49,surface,prep);
+          jarWaterMesh.visible=showingWater;
+          jarSurface.visible=meniscus.visible=showingWater&&(prep||inTank)&&(!inTank||p>0);
+          surfacePatch.visible=!placed.has('jar')||!inTank;
+          const hasLid=assembled&&(step===4&&time>=prepCapAt&&time<immerseAt||scope(4,capAt)&&!(verifying&&scope(verificationStep,.04)));
           lid.visible=lidRim.visible=hasLid;
-          const covering=assembled&&step===4&&time>=fillEnd&&time<capAt;
-          const uncovering=assembled&&step===7&&time>=.04&&time<.92;
-          carriedPlate.visible=covering||uncovering;
-          if(covering) carriedPlate.position.copy(waterPlateRest).lerp(V(jarX,.48,jarZ),ease(fillEnd,capAt));
-          if(uncovering) carriedPlate.position.copy(testMouth).lerp(plateRest,ease(.04,.92));
+          const precapping=assembled&&step===4&&time<prepCapAt;
+          const movingPlate=assembled&&step===4&&time>=immerseAt&&time<capAt;
+          const testingPlate=assembled&&verifying&&step===verificationStep&&time>=.04&&time<.92;
+          carriedPlate.visible=precapping||movingPlate||testingPlate;
+          if(precapping){
+            const progress=ease(waterFullAt,prepCapAt);
+            carriedPlate.position.copy(prepPlateRest).lerp(testMouth,progress);
+            carriedPlate.position.y+=.70*Math.sin(Math.PI*progress);
+          }
+          if(movingPlate) carriedPlate.position.copy(jarMouthWet).lerp(waterPlateRest,ease(immerseAt,uncoverAt)*(1-ease(outletClearAt,capAt)));
+          if(testingPlate) carriedPlate.position.copy(testMouth).lerp(plateRest,ease(.04,.92));
+          pitcher.visible=assembled&&step===4&&time<prepCapAt;
+          pourStream.visible=pitcher.visible&&time>.43&&time<1.34;
+          if(pitcher.visible){
+            const pour=ease(0,.43)*(1-ease(1.34,waterFullAt));
+            pitcher.position.copy(pitcherRest).lerp(pitcherPour,pour);
+            pitcher.rotation.z=1.25*pour;
+            pitcherWater.scale.y=1-.93*waterLoaded;
+            pitcherWater.position.y=.07+.26*pitcherWater.scale.y;
+            if(pourStream.visible){
+              const source=V(-.31,.72,0).applyQuaternion(pitcher.quaternion).add(pitcher.position);
+              const dest=testMouth.clone().add(V(0,-.15,0));
+              pourStream.position.copy(source).lerp(dest,.5);
+              pourStream.quaternion.setFromUnitVectors(V(0,1,0),source.clone().sub(dest).normalize());
+              pourStream.scale.y=source.distanceTo(dest);
+            }
+          }
 
           const open=assembled&&step===1;
           for(const piece of [stopper,stopperLip,holeEdge]) piece.visible=!open;
           pipeGroup.visible=placed.has('pipe')&&!open;
-          if(assembled){
-            const stopperShift=step===2?1-ease(0,.83):0;
-            pipeGroup.position.set(.75*stopperShift,.30*stopperShift,.34*stopperShift);
-          }
           const dried=assembled&&scope(5,.75);
           const useBath=assembled&&!inBath&&!dried;
-          const inserting=assembled&&step===4&&time>=2.78&&time<fillStart;
+          const inserting=assembled&&step===4&&time>=bubblesReadyAt&&time<fillStart;
+          const clearing=assembled&&step===4&&time>fillEnd&&time<outletClearAt;
           const pulling=assembled&&step===5&&time<.75;
-          const dipping=assembled&&step===2&&time>=1.04&&time<1.75;
-          const stagedDry=assembled&&step===2&&time<1.04;
-          const moving=inserting||pulling||dipping;
+          const dipping=assembled&&step===2&&time>=heightAt&&time<dipAt;
+          const stagedDry=assembled&&step===2&&time<heightAt;
+          const moving=inserting||clearing||pulling||dipping;
           if(moving) {
-            if(inserting) bendOutlet(bathPipe.curve,wetPipe,ease(2.78,fillStart),'bottle');
+            if(inserting) bendOutlet(bathPipe.curve,wetPipe,ease(bubblesReadyAt,fillStart),'bottle');
+            if(clearing) bendOutlet(wetPipe,bathPipe.curve,ease(fillEnd,outletClearAt),'clear');
             if(pulling) bendOutlet(bathPipe.curve,dryPipe.curve,ease(0,.75),'lift');
-            if(dipping) bendOutlet(dryPipe.curve,bathPipe.curve,ease(1.04,1.75),'dip');
+            if(dipping) bendOutlet(dryPipe.curve,bathPipe.curve,ease(heightAt,dipAt),'dip');
           }
           morphTube.visible=morphTip.visible=moving;
           collectorTube.visible=outlet.visible=!moving&&!useBath&&!dried;
@@ -1467,10 +1617,21 @@
           jaws[1].position.z=jawOpening;
           const insert=ease(.40,2.08), out=ease(3.50,4.50);
           const tips=ease(2.08,2.73)-ease(4.35,5.05);
-          const tiltOffset=scope(2,1.04)?0:step===2?.096*(1-ease(.30,1.04)):.096+(loading?.205*tips:0);
-          tube.quaternion.copy(tubeBase);
-          if(open||step===2) tube.quaternion.premultiply(new T.Quaternion().setFromAxisAngle(zAxis,tiltOffset));
-          tube.position.z=tubeZ+(loading?.38*(ease(.06,.36)-ease(5.56,6.12)):0);
+          const tiltOffset=loading?.096+.205*tips:assembled&&step===2?.096*(1-ease(tiltStart,tiltEnd)):0;
+          const tiltPose=new T.Quaternion().setFromAxisAngle(zAxis,tiltOffset);
+          tube.quaternion.copy(tubeBase).premultiply(tiltPose);
+          tube.position.copy(closed);
+          tube.position.y+=tubeLift;
+          tube.position.z+=loading?.38*(ease(.06,.36)-ease(5.56,6.12)):0;
+          clampMount.position.y=tubeLift;
+          const stopperShift=assembled&&step===2?1-ease(0,tiltStart):0;
+          proximalPipe.quaternion.copy(tiltPose);
+          proximalPipe.position.copy(tube.position).sub(closed.clone().applyQuaternion(tiltPose));
+          proximalPipe.position.add(V(.75,.30,.34).multiplyScalar(stopperShift));
+          updateTankConnection();
+          for(const [i,at] of tubePins) parts[i].xyz.copy(at).applyQuaternion(tiltPose).add(tube.position);
+          for(const [i,at] of inletPins) parts[i].xyz.copy(at).applyQuaternion(tiltPose).add(proximalPipe.position);
+          parts[8].xyz.copy(sleeveMidpoint);
           chute.visible=loading&&time>.32&&time<4.52;
           chute.position.y=U.lerp(length+.84,.30,insert)+out*(length+.65);
           payload.forEach(({grain,destination,y,z},i)=>{
@@ -1497,48 +1658,94 @@
           towel.position.copy(towelStart).lerp(towelEnd,ease(0,.74));
           const towelContact=ease(0,.74);
           towel.rotation.set(.12*(1-towelContact),.08*(1-towelContact),-.14+.045*towelContact);
-          match.visible=assembled&&step===3&&time<1.35;
-          match.rotation.z=-1.22;
-          match.position.copy(lampRest).lerp(wick,ease(0,.77));
+          matchBox.visible=match.visible=assembled&&step===3;
+          if(match.visible){
+            const contactAt=.27, sparksAt=.69, sparksOut=.97;
+            if(time<contactAt){
+              match.position.copy(matchStart).lerp(matchStripStart,ease(0,contactAt));
+              matchShaft.rotation.z=U.lerp(-1.10,-1.33,ease(0,contactAt));
+            } else if(time<strikeAt){
+              match.position.copy(matchStripStart).lerp(matchStripEnd,ease(contactAt,strikeAt));
+              matchShaft.rotation.z=-1.33-.12*ease(contactAt,strikeAt);
+            } else if(time<litAt){
+              const u=ease(strikeAt,litAt);
+              match.position.copy(matchStripEnd).lerp(alignedWick,u);
+              match.position.y+=.65*Math.sin(Math.PI*u);
+              matchShaft.rotation.z=U.lerp(-1.45,-1.11,u);
+            } else {
+              const u=ease(litAt,matchAwayAt);
+              match.position.copy(alignedWick).lerp(matchDiscard,u);
+              match.position.y+=.42*Math.sin(Math.PI*u);
+              matchShaft.rotation.z=U.lerp(-1.11,-Math.PI*.5,u);
+            }
+            matchFire.visible=time>=sparksAt&&time<litAt+.27;
+            matchFire.scale.setScalar(matchFire.visible?U.lerp(.34,1,ease(sparksAt,strikeAt))*(1-.76*ease(litAt+.14,litAt+.27)):1);
+            matchHead.material=time<litAt+.27?unstruck:charred;
+            const sparksLive=time>=sparksAt&&time<sparksOut;
+            const scatter=ease(sparksAt,sparksOut);
+            for(let i=0;i<matchSparks.length;i++){
+              const spark=matchSparks[i];
+              spark.visible=sparksLive;
+              if(sparksLive){
+                spark.position.set((-1+i*.20)*scatter,(.10+i%3*.12)*scatter-.13*scatter*scatter,.042+i*.016*scatter);
+                spark.scale.setScalar((.036+(i%3)*.012)*(1-.58*scatter));
+              }
+            }
+          }
           lampCap.visible=placed.has('lamp');
           const capProgress=step>6?1:step===6?ease(0,.84):0;
-          lampCap.position.copy(capRest).lerp(V(lampX,burnerSeat,lampZ),capProgress);
+          lampCap.position.copy(capRest).lerp(V(lampX,burnerSeat,lampZ+lampAimZ),capProgress);
           lampCap.position.y+=.75*Math.sin(Math.PI*capProgress);
-          splint.visible=assembled&&scope(7,.92);
-          splintFlame.visible=splint.visible&&scope(7,1.81);
+          splint.visible=assembled&&verifying&&scope(verificationStep,.92);
+          splintFlame.visible=splint.visible&&scope(verificationStep,1.81);
           const down=step>7?1:ease(.92,1.81);
           splint.position.copy(splintRest).lerp(V(laterJar.x,2.66,laterJar.z),down);
           splint.rotation.z=.17;
-          const active=assembled&&scope(3,.76)&&!scope(6,.84);
+          const active=assembled&&scope(3,litAt)&&!scope(6,.84);
           flame.visible=active;
+          // The glass limits the visible height of the flame along the sloped tube.
+          const outerScale=U.clamp((tubeBottomAt(lampAimX+.03+preheatTravel*sweep)+tubeLift-flame.position.y)/.93,.62,1);
           if(active&&reaction&&!reduced.matches) {
-            flame.rotation.z=.061*Math.sin(time*13)+.025*Math.sin(time*28);
-            flame.scale.set(1+.041*Math.cos(time*18),.985+.043*Math.sin(time*16),1);
-          } else {flame.rotation.z=0;flame.scale.set(1,1,1);}
+            flame.rotation.z=.030*Math.sin(time*13)+.013*Math.sin(time*28);
+            flame.scale.set(1+.041*Math.cos(time*18),outerScale*(.985+.033*Math.sin(time*16)),1);
+          } else {flame.rotation.z=0;flame.scale.set(1,outerScale,1);}
           for(let i=0;i<dots.length;i++){
             const u=(time-1.09)*5.2-i*.56;
             const d=u%7.9;
             const ob=dots[i];
             ob.visible=assembled&&step===4&&u>=0&&time<fillEnd;
             if(ob.visible){
-              if(d<2.25) ob.position.copy(seedPoint).lerp(routePoints[0],d/2.25);
+              if(d<2.25) ob.position.copy(seedPoint).lerp(routePoints[0],d/2.25)
+                .applyQuaternion(tiltPose).add(proximalPipe.position);
               else {
                 const t=U.clamp((d-2.25)/5.65,0,1);
-                if(useBath&&t>=sleeveEnd) ob.position.copy(bathPipe.curve.getPoint((t-sleeveEnd)/(1-sleeveEnd)));
-                else ob.position.copy(pipeRoute.getPoint(t));
-                if(t>sleeveStart&&t<sleeveEnd) ob.visible=false;
+                if(t<=sleeveStart) ob.position.copy(pipeRoute.getPoint(t)).applyQuaternion(tiltPose).add(proximalPipe.position);
+                else if(t<sleeveEnd) ob.visible=false;
+                else {
+                  const route=moving?outletBlend:useBath?bathPipe.curve:wetPipe;
+                  ob.position.copy(route.getPoint((t-sleeveEnd)/(1-sleeveEnd)));
+                }
               }
               ob.scale.setScalar(i%3===0?.07:.049);
             }
           }
+          const waitingForBubbles=step===4&&time>=uncoverAt&&time<bubblesReadyAt;
+          const steadyBubbles=step===4&&time>=bubblesReadyAt&&time<=fillEnd;
+          const bubbleTime=waitingForBubbles?time-uncoverAt:
+            inBath?time-fillStart:time>=bubblesReadyAt?bubblesReadyAt-uncoverAt+Math.max(0,(at-steadyAt)/1000):0;
+          const regularAfter=1.65, bubbleSpacing=.22;
+          const sparseAt=[.17,.76,1.39];
           for(let i=0;i<bubbles.length;i++){
             const checking=step===0&&time>.61;
-            const emits=step===4&&time>1.15&&time<fillEnd;
-            const u=(time-(checking?.61:inBath?fillStart:1.15))*2.24-i*.37;
-            const start=inBath?V(jarX,.72,jarZ):bathPipe.end;
-            const y=start.y+u%(inBath?2.91:.66);
+            const emits=waitingForBubbles||steadyBubbles;
+            const sparse=waitingForBubbles&&bubbleTime<regularAfter;
+            const elapsed=checking?time-.61-i*.16:sparse?bubbleTime-(sparseAt[i]??Infinity):
+              bubbleTime-(inBath?0:regularAfter)-i*bubbleSpacing;
+            const age=sparse?elapsed:elapsed%(bubbles.length*bubbleSpacing);
+            const start=inBath?mouthWet:inserting?morphTip.position:bathPipe.end;
+            const y=start.y+age*(inBath?1.38:.88);
             const ob=bubbles[i];
-            ob.visible=assembled&&(checking||emits)&&u>=0&&y<(inBath?surface-.025:.78);
+            ob.visible=assembled&&(checking||emits)&&elapsed>=0&&y<(inBath?surface-.025:poolLevel+.04);
             if(ob.visible){
               const s=y-start.y;
               ob.position.set(start.x+Math.sin(s*5+i*2.25)*Math.min(.18,s*.14),y,start.z+Math.cos(s*4+i)*Math.min(.16,s*.12));
@@ -1546,19 +1753,19 @@
               ob.quaternion.copy(camera.quaternion);
             }
           }
-          gasLabel.hidden=!assembled||p<.30||scope(7,.92);
+          gasLabel.hidden=!assembled||p<.30||(verifying&&scope(verificationStep,.92));
           if(!gasLabel.hidden) {
             const [x,y]=coords(collected?V(laterJar.x,1.42,laterJar.z):V(jarX,(3.23+surface)*.5,jarZ).applyQuaternion(jarGroup.quaternion).add(jarGroup.position));
             gasLabel.hidden=x<14||x>width-14||y<12||y>height-12;
             gasLabel.style.transform='translate('+x+'px,'+y+'px) translate(-50%,-50%)';
           }
-          const complete=[0,1,2,3,4,7,8,9,11];
+          const complete=[0,1,2,3,17,19,8,9,11];
           let next=complete[step];
           if(step===0&&time>.85)next=1;
           if(step===1&&time>.30)next=time<2.37?12:time<3.58?13:time<5.56?14:2;
-          if(step===2&&time>1.04)next=3;
-          if(step===3&&time>.76)next=4;
-          if(step===4&&time>1.15)next=time<fillStart?5:time<capAt?6:7;
+          if(step===2&&time>=heightAt)next=time<dipAt?15:3;
+          if(step===3&&time>=litAt)next=time<matchAwayAt?4:16;
+          if(step===4&&time>=uncoverAt)next=time<bubblesReadyAt?18:time<fillStart?5:time<fillEnd?6:time<liftAt?7:19;
           if(step===5&&time>.75)next=8;
           if(step===6&&time>.84)next=9;
           if(step===7&&time>1.02)next=time<1.81?10:11;
@@ -1573,7 +1780,7 @@
             if(progress>=1) advanceAction();
           }
           positionCamera();
-          model();
+          model(at);
           if(loose){
             const group=apparatus.get(loose.slot.id);
             group.position.copy(loose.delta);
@@ -1581,12 +1788,14 @@
           }
           renderer.render(scene,camera);
           if(assembled){
-            if(step===procedure.length) layoutPins(); else parts.forEach(p=>{p.btn.hidden=true;});
+            if(finished()) layoutPins(); else parts.forEach(p=>{p.btn.hidden=true;});
             layoutAction();
           } else layoutTargets();
-          if(reaction) request();
+          if(reaction||assembled&&step===4&&currentAction()?.start===bubblesReadyAt) request();
         }
         function request(){if(!raf) raf=requestAnimationFrame(frame);}
+        scene.add(pitcher);
+        lampGroup.add(matchBox,match,lampCap);
         phase=0;
         for(const name of ['orbit','zoom-in','zoom-out','home']) el(name).disabled=false;
         updateAssembly();
