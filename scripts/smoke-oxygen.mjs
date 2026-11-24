@@ -28,6 +28,11 @@ const groups = [
   [[/导管/, /水面上方/]],
   [[/灯帽/, /酒精灯/]]
 ];
+const mistakes = {
+  '1:3': { id: 'cotton', source: /橡胶塞/, target: /试管口/, explanation: /粉末.*导管/, retry: /纸槽/ },
+  '2:1': { id: 'tilt', source: /酒精灯/, target: /试管.*下方|加热位置/, explanation: /冷凝水.*(回流|倒流)/, retry: /橡胶塞/ },
+  '5:0': { id: 'order', source: /灯帽/, target: /酒精灯/, explanation: /倒吸/, retry: /导管/ }
+};
 
 async function point(locator) {
   const box = await locator.boundingBox();
@@ -59,6 +64,10 @@ async function checkOxygen(phone) {
   const destination = page.locator('[data-action="destination"]');
   const sourceNamed = name => source.and(page.getByRole('button', { name }));
   const destinationNamed = name => destination.and(page.getByRole('button', { name }));
+  const alternateSource = page.locator('[data-action="alternate-source"]');
+  const alternateDestination = page.locator('[data-action="alternate-destination"]');
+  const mistakeDialog = lab('mistake-dialog');
+  const retryStep = lab('retry-step');
   const actionStatus = page.locator('.lab-action-hint [role="status"]');
   const interactions = lab('interactions');
   const act = locator => phone ? locator.tap() : locator.click();
@@ -89,6 +98,51 @@ async function checkOxygen(phone) {
     } else {
       await drag(page, await point(source), await point(destination));
     }
+  }
+
+  async function tryMistake(index, mistake) {
+    await alternateSource.waitFor();
+    assert.match(await alternateSource.getAttribute('aria-label'), mistake.source);
+    const readScene = () => canvas.evaluate(async element => {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return element.toDataURL();
+    });
+    const before = await readScene();
+    if (phone) {
+      await act(alternateSource);
+      await alternateDestination.waitFor();
+      assert.match(await alternateDestination.getAttribute('aria-label'), mistake.target);
+      await act(alternateDestination);
+    } else {
+      const from = await point(alternateSource);
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      try {
+        await alternateDestination.waitFor();
+        assert.match(await alternateDestination.getAttribute('aria-label'), mistake.target);
+        const to = await point(alternateDestination);
+        await page.mouse.move(to.x, to.y, { steps: 10 });
+      } finally {
+        await page.mouse.up();
+      }
+    }
+    await mistakeDialog.waitFor({ timeout: 7000 }).catch(async error => {
+      await photo(`mistake-${mistake.id}-failure`);
+      throw new Error(`${name}: mistake ${mistake.id} did not open (mode: ${await interactions.getAttribute('data-kind')}, status: ${await actionStatus.textContent()}, page errors: ${errors.join('; ')})`, { cause: error });
+    });
+    assert.equal(await mistakeDialog.getAttribute('data-mistake'), mistake.id);
+    assert.match(await mistakeDialog.textContent(), mistake.explanation);
+    assert.notEqual(await readScene(), before, `${name}: mistake ${mistake.id} must change the 3D scene`);
+    assert.equal((await current.textContent()).trim()[0], keywords[index]);
+    assert.equal(await complete.count(), index);
+    assert.equal(await lab('assembly-count').textContent(), '6 / 6');
+    await photo(`mistake-${mistake.id}`);
+    await act(retryStep);
+    await mistakeDialog.waitFor({ state: 'hidden' });
+    await sourceNamed(mistake.retry).waitFor();
+    assert.equal((await current.textContent()).trim()[0], keywords[index]);
+    assert.equal(await complete.count(), index);
+    assert.equal(await lab('assembly-count').textContent(), '6 / 6');
   }
 
   async function preheat() {
@@ -198,7 +252,9 @@ async function checkOxygen(phone) {
     });
 
     for (const [index, operations] of groups.entries()) {
-      for (const [operation, [sourceLabel, targetLabel]] of operations.entries()) {
+      const triedMistakes = new Set();
+      for (let operation = 0; operation < operations.length; operation++) {
+        const [sourceLabel, targetLabel] = operations[operation];
         if (sourceLabel) await sourceNamed(sourceLabel).waitFor();
         assert.equal((await current.textContent()).trim()[0], keywords[index]);
         assert.equal(await complete.count(), index);
@@ -206,6 +262,13 @@ async function checkOxygen(phone) {
         await destinationNamed(targetLabel).waitFor();
         assert.match(await destination.getAttribute('title'), targetLabel);
         assert(await lab('play').isHidden());
+        const mistake = mistakes[`${index}:${operation}`];
+        if (mistake && !triedMistakes.has(mistake.id)) {
+          await tryMistake(index, mistake);
+          triedMistakes.add(mistake.id);
+          operation = -1;
+          continue;
+        }
         if (index === 3 && operation === 1) await scene('struck-match');
         if (index === 4 && operation === 2) await scene('water-filled-and-covered');
         if (index === 4 && operation === 4) {
@@ -267,7 +330,7 @@ async function checkOxygen(phone) {
     assert.equal(await rootEl.getAttribute('data-mode'), 'assembly');
     assert(await source.isHidden());
     assert.deepEqual(errors, []);
-    console.log(`Oxygen ${name}: seven steps, optional verification, and both resets passed.`);
+    console.log(`Oxygen ${name}: seven steps, three mistake retries, optional verification, and both resets passed.`);
   } finally {
     await page.close();
   }

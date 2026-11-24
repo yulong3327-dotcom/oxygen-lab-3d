@@ -229,6 +229,38 @@ h1 { font-size: .99rem; font-weight: 700; }
   border-color: #abd9cc;
 }
 .lab-interactions[data-kind="observe"] .lab-action-step { color: #14654f; }
+.lab-action-source[data-action="alternate-source"]::before,
+.lab-action-destination[data-action="alternate-destination"]::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border: 1px solid var(--surface);
+  border-radius: inherit;
+  pointer-events: none;
+}
+.lab-action-source[data-action="alternate-source"],
+.lab-action-destination[data-action="alternate-destination"] {
+  width: 38px;
+  height: 38px;
+  border-color: #64748b;
+  background: #f8fafcb3;
+  color: #334155;
+}
+.lab-mistake-dialog {
+  width: min(410px, calc(100% - 32px));
+  padding: 19px 21px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 14px 40px #0f172a30;
+}
+.lab-mistake-dialog::backdrop { background: #14233e40; }
+.lab-mistake-dialog h2 { font-size: 1.15rem; line-height: 1.4; margin: 3px 0 9px; }
+.lab-mistake-dialog p { margin: 0 0 10px; line-height: 1.55; }
+.lab-mistake-dialog .lab-mistake-eyebrow { margin: 0; color: #96500f; font-size: .8rem; font-weight: 650; }
+.lab-mistake-dialog .lab-mistake-correction { padding-inline-start: 10px; border-inline-start: 3px solid var(--accent); }
+.lab-mistake-dialog .btn { min-height: 42px; margin-top: 4px; }
 .lab-lines { color: #626b7b; }
 .lab-pin { position: absolute; inset: 0 auto auto 0; white-space: nowrap; pointer-events: auto; }
 .lab-fallback { position: absolute; inset: 40% 10px auto; text-align: center; }

@@ -1273,7 +1273,6 @@
         const originalLampPin=parts[4].xyz.clone();
         const tubePins=[0,7].map(i=>[i,parts[i].xyz.clone().sub(closed)]);
         const inletPins=[1,2].map(i=>[i,parts[i].xyz.clone()]);
-        const scope=(i,t)=>step>i||(step===i&&time>=t);
         const towelStart=V(-2.94,3.62,.60), towelEnd=V(-3.92,2.90,.32);
         const mouthWet=V(jarX,.71,jarZ), wick=V(lampX-.012,wickTip,lampZ);
         const tiltStart=.83, tiltEnd=1.04, heightAt=1.86, dipAt=2.55;
@@ -1367,6 +1366,37 @@
             grip('带火星的木条','集气瓶内',splintRest,V(laterJar.x,2.61,laterJar.z),.92,1.81,'把带火星的木条伸进集气瓶。',2.90)
           ]
         ];
+        const alternateActions={
+          cotton:{
+            step:1,index:3,source:'橡胶塞',destination:'试管口',
+            from:actions[2][0].from,to:actions[2][0].to,
+            title:'没放棉花，粉末可能进入导管',
+            observing:'观察：加热后，细小的紫色粉末随气流进入导管。',
+            explanation:'高锰酸钾受热时，细小粉末可能随气流进入导管，污染甚至堵塞导管。',
+            correction:'塞紧前，在试管口内侧放一小团疏松棉花。它挡住粉末，让气体通过。',
+            seconds:3.1
+          },
+          tilt:{
+            step:2,index:1,source:'酒精灯',destination:'试管底部下方',
+            from:lampGrip,to:wick.clone().add(V(0,.44,0)),
+            title:'管口没有向下，冷凝水可能回流',
+            observing:'观察：管口附近凝结的水滴向受热的试管底部流动。',
+            explanation:'加热时，较冷的管口附近可能凝结水滴。管口没有略向下时，冷凝水可能回流到受热的试管底部，使玻璃骤冷破裂。',
+            correction:'固定装置时，把试管口调到比管底略低，再加热。',
+            seconds:3.0
+          },
+          order:{
+            step:5,index:0,source:'灯帽',destination:'酒精灯',
+            from:actions[6][0].from,to:capSeatGrip,
+            title:'先熄灯，水可能倒吸',
+            observing:'观察：火焰熄灭后，水从水槽沿导管倒流。',
+            explanation:'熄灯后，装置内的气体冷却收缩，压强降低。导管口还浸在水里时，水可能倒吸进热试管，使玻璃骤冷破裂。',
+            correction:'集气结束后，先把导管移出水面，再用灯帽盖灭酒精灯。',
+            seconds:3.4
+          }
+        };
+        const currentAlternate=()=>Object.entries(alternateActions).find(([,op])=>op.step===step&&op.index===actionIndex);
+        let failureDemo=null,hazardDrag=null;
         const actionOverlay=el('interactions');
         const actionLine=document.createElement('div');
         actionLine.className='lab-action-line';
@@ -1390,6 +1420,10 @@
         }
         const actionSource=actionButton('source','hand');
         const actionDestination=actionButton('destination','crosshair');
+        const alternateSource=actionButton('source','hand');
+        const alternateDestination=actionButton('destination','crosshair');
+        alternateSource.dataset.action='alternate-source';
+        alternateDestination.dataset.action='alternate-destination';
         const actionSvgNS='http://www.w3.org/2000/svg';
         function guideSvg(className){
           const svg=document.createElementNS(actionSvgNS,'svg');
@@ -1416,21 +1450,51 @@
           point.dataset.preheatEdge=edge;
           return point;
         });
-        actionOverlay.append(preheatTrack,actionLine,actionSource,actionDestination,actionHint);
+        actionOverlay.append(preheatTrack,actionLine,actionSource,actionDestination,alternateSource,alternateDestination,actionHint);
         window.lucide?.createIcons();
         const verificationStep=procedure.length;
         const finished=()=>step>=verificationStep&&!(step===verificationStep&&verifying);
         const currentAction=()=>finished()?null:actions[step]?.[actionIndex];
         const verificationButton=el('verify-oxygen');
+        const mistakeDialog=el('mistake-dialog'),retryStep=el('retry-step');
         let verifying=false;
         let suppressActionClick=0;
-        let preheatGuide;
+        let preheatGuide, alternateSelected=false;
         function resetExperiment(){
           step=0;time=0;phase=-1;selected=-1;actionIndex=0;verifying=false;steadyAt=0;
           preheatX=lampX;preheatVisited=0;
           reaction=null;actionTouch=null;heldSource=false;
+          failureDemo=null;hazardDrag=null;alternateSelected=false;
+          if(mistakeDialog.open) mistakeDialog.close();
           clearActionDrag();
         }
+        function demonstrateMistake(id,pose={}){
+          const alternate=alternateActions[id];
+          if(!alternate||failureDemo||reaction) return;
+          failureDemo={id,progress:0,at:performance.now(),...pose};
+          hazardDrag=null;heldSource=false;alternateSelected=false;
+          syncAction();request();
+        }
+        function finishMistake(){
+          const {id}=failureDemo, alternate=alternateActions[id];
+          mistakeDialog.dataset.mistake=id;
+          el('mistake-title').textContent=alternate.title;
+          el('mistake-explanation').textContent=alternate.explanation;
+          el('mistake-correction').textContent=alternate.correction;
+          mistakeDialog.showModal();
+          retryStep.focus({preventScroll:true});
+        }
+        function retryMistake(){
+          if(!failureDemo) return;
+          failureDemo=null;hazardDrag=null;alternateSelected=false;heldSource=false;phase=-1;
+          actionIndex=0;
+          mistakeDialog.close();
+          delete mistakeDialog.dataset.mistake;
+          enterAction();
+          actionSource.focus({preventScroll:true});
+        }
+        retryStep.addEventListener('click',retryMistake);
+        mistakeDialog.addEventListener('cancel',e=>{e.preventDefault();retryMistake();});
         function syncAction(){
           const op=currentAction();
           const done=assembled&&!op;
@@ -1440,15 +1504,25 @@
           actionOverlay.hidden=!assembled;
           el('lines').toggleAttribute('hidden',!done);
           if(!assembled) return;
-          const manual=!!op?.source&&!reaction, preheating=manual&&op.kind==='preheat';
-          actionOverlay.dataset.kind=preheating?'preheat':manual?'drag':'observe';
+          const manual=!!op?.source&&!reaction&&!failureDemo, preheating=manual&&op.kind==='preheat';
+          const alternate=manual&&currentAlternate()?.[1];
+          actionOverlay.dataset.kind=failureDemo?'mistake':preheating?'preheat':manual?'drag':'observe';
+          alternateSource.hidden=!alternate;
+          alternateDestination.hidden=!alternate||!alternateSelected&&!hazardDrag?.alternate;
+          alternateSource.setAttribute('aria-pressed',String(alternateSelected));
+          if(alternate){
+            alternateSource.setAttribute('aria-label','选取'+alternate.source);
+            alternateDestination.setAttribute('aria-label','放到'+alternate.destination);
+            alternateSource.title=alternate.source;
+            alternateDestination.title=alternate.destination;
+          }
           actionSource.hidden=!manual;
           actionDestination.hidden=actionLine.hidden=!manual||preheating;
           preheatTrack.toggleAttribute('hidden',!preheating);
           actionDestination.classList.toggle('is-near',manual&&heldSource);
           actionSource.setAttribute('aria-pressed',String(heldSource));
           actionStep.textContent=done?'实验完成':verifying?'检验氧气':('步骤 '+String(step+1).padStart(2,'0')+' · '+procedure[step][0]);
-          actionMessage.textContent=done?(step>verificationStep?'带火星的木条复燃，检验为氧气。':'已先移出导管，再盖灭酒精灯。'):(reaction?.hint||op.hint);
+          actionMessage.textContent=done?(step>verificationStep?'带火星的木条复燃，检验为氧气。':'已先移出导管，再盖灭酒精灯。'):(failureDemo?alternateActions[failureDemo.id].observing:reaction?.hint||op.hint);
           if(preheating){
             actionSource.removeAttribute('aria-pressed');
             actionSource.setAttribute('role','slider');
@@ -1485,7 +1559,7 @@
         }
         function advanceAction(){
           const keyboard=document.activeElement===actionSource||document.activeElement===actionDestination||reaction?.keyboard;
-          reaction=null;heldSource=false;actionIndex++;
+          reaction=null;heldSource=false;alternateSelected=false;actionIndex++;
           if(actionIndex>=actions[step].length){
             step++;actionIndex=0;refreshProcedure();
           }
@@ -1495,7 +1569,7 @@
         }
         function acceptAction(){
           const op=currentAction();
-          if(!op?.source||op.kind==='preheat'||reaction) return;
+          if(!op?.source||op.kind==='preheat'||reaction||failureDemo) return;
           const outcome=step===0?'观察导管口是否冒出气泡。':step===1&&actionIndex===1?'观察药粒滑到试管底部。':step===verificationStep&&actionIndex===1?'观察带火星的木条是否复燃。':null;
           const keyboard=document.activeElement===actionDestination||document.activeElement===actionSource;
           if(op.finish===time){advanceAction();return;}
@@ -1541,10 +1615,9 @@
           const op=currentAction(), margin=24;
           actionHint.style.left='10px';
           actionHint.style.top='10px';
-          if(!op?.source||op.kind==='preheat'||reaction) return;
+          if(!op?.source||op.kind==='preheat'||reaction||failureDemo) return;
           const from=coords(op.from),to=coords(op.to),visible=onCanvas(from)&&onCanvas(to);
           actionSource.style.visibility=actionDestination.style.visibility=actionLine.style.visibility=visible?'':'hidden';
-          if(!visible) return;
           const keepButtonInView=([x,y])=>[U.clamp(x,margin,width-margin),U.clamp(y,margin,height-margin)];
           const sourcePoint=keepButtonInView(from), b=keepButtonInView(to);
           const a=step===0
@@ -1556,6 +1629,8 @@
             valid.sort((c,d)=>Math.hypot(c[0]-b[0],c[1]-b[1])-Math.hypot(d[0]-b[0],d[1]-b[1]));
             if(valid.length) [b[0],b[1]]=valid[0];
           }
+          layoutAlternate([a,b],keepButtonInView);
+          if(!visible) return;
           const hintW=actionHint.offsetWidth,hintH=actionHint.offsetHeight;
           const corners=[[10,10],[width-hintW-10,10],[10,height-hintH-10],[width-hintW-10,height-hintH-10]];
           const crowd=([left,top])=>[a,b].filter(([x,y])=>x+26>left&&x-26<left+hintW&&y+26>top&&y-26<top+hintH).length;
@@ -1571,15 +1646,38 @@
           actionLine.style.transform='rotate('+Math.atan2(dy,dx)+'rad)';
           return {a,b,sourcePoint};
         }
+        function layoutAlternate(occupied,keepInView){
+          const entry=currentAlternate();
+          if(!entry) return;
+          const [id,op]=entry;
+          const from=coords(op.from),to=coords(op.to);
+          alternateSource.style.visibility=onCanvas(from)?'':'hidden';
+          alternateDestination.style.visibility=onCanvas(to)?'':'hidden';
+          const distance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+          const place=(anchor,avoid)=>{
+            const candidates=[[0,0],[42,0],[-42,0],[0,42],[0,-42],[34,34],[-34,34],[34,-34],[-34,-34]]
+              .map(([dx,dy])=>keepInView([anchor[0]+dx,anchor[1]+dy]));
+            const cost=p=>distance(p,anchor)+avoid.reduce((sum,point)=>sum+8*Math.max(0,43-distance(p,point)),0);
+            return candidates.reduce((best,p)=>cost(p)<cost(best)?p:best);
+          };
+          const a=place(from,occupied);
+          const b=place(to,[...occupied,a]);
+          const onScreen=actionTouch?.alternate&&actionTouch.point?actionTouch.point:a;
+          for(const [btn,[x,y]] of [[alternateSource,onScreen],[alternateDestination,b]]){
+            btn.style.left=x+'px';btn.style.top=y+'px';
+          }
+          return {id,from,to,a,b};
+        }
         function onCanvas([x,y]){return x>=0&&x<=width&&y>=0&&y<=height;}
         function clearActionDrag(){
           actionTouch=null;
+          hazardDrag=null;
           delete actionOverlay.dataset.dragging;
           actionDestination.classList.remove('is-near');
         }
         function actionPointerDown(e,handle){
           const op=currentAction();
-          if(!assembled||!op?.source||reaction||actionTouch||e.button!==0) return false;
+          if(!assembled||!op?.source||reaction||failureDemo||actionTouch||e.button!==0) return false;
           const bounds=stage.getBoundingClientRect(), x=e.clientX-bounds.left,y=e.clientY-bounds.top;
           if(op.kind==='preheat'){
             layoutPreheat();
@@ -1591,10 +1689,19 @@
           }
           const path=layoutAction();
           if(!path) return false;
-          if(!handle&&Math.hypot(x-path.sourcePoint[0],y-path.sourcePoint[1])>39) return false;
+          const alt=layoutAlternate([path.a,path.b],([a,b])=>[U.clamp(a,24,width-24),U.clamp(b,24,height-24)]);
+          const mainDistance=Math.hypot(x-path.sourcePoint[0],y-path.sourcePoint[1]);
+          const altDistance=alt?Math.hypot(x-alt.from[0],y-alt.from[1]):Infinity;
+          const alternate=alt&&(handle==='alternate'||!handle&&altDistance<30&&altDistance<mainDistance);
+          if(handle==='alternate'&&!alternate||!handle&&!alternate&&mainDistance>39) return false;
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
-          actionTouch={id:e.pointerId,x,y,...path,point:null,near:false};
+          actionTouch={id:e.pointerId,x,y,...path,point:null,near:false,alternate:alternate?alt:null};
+          if(alternate){
+            hazardDrag={alternate:true,id:alt.id};
+            alternateSelected=false;heldSource=false;
+            syncAction();request();
+          }
           return true;
         }
         function actionPointerMove(e){
@@ -1612,12 +1719,35 @@
           }
           if(!f.point&&Math.hypot(x-f.x,y-f.y)<5) return;
           actionOverlay.dataset.dragging='';
+          if(f.alternate){
+            const alt=f.alternate;
+            const px=alt.a[0]+x-f.x,py=alt.a[1]+y-f.y;
+            f.point=[px,py];
+            f.near=Math.min(Math.hypot(px-alt.b[0],py-alt.b[1]),Math.hypot(x-alt.to[0],y-alt.to[1]))<30;
+            const dx=alt.b[0]-alt.a[0],dy=alt.b[1]-alt.a[1];
+            const progress=U.clamp(((px-alt.a[0])*dx+(py-alt.a[1])*dy)/Math.max(1,dx*dx+dy*dy),0,1);
+            const reference=alternateActions[alt.id].from;
+            const depth=reference.clone().project(camera).z;
+            const delta=V(2*(alt.from[0]+x-f.x)/width-1,1-2*(alt.from[1]+y-f.y)/height,depth).unproject(camera).sub(reference);
+            hazardDrag={alternate:true,id:alt.id,cap:progress,stopperOffset:delta,lampOffset:delta};
+            alternateDestination.classList.toggle('is-near',f.near);
+            request();return;
+          }
           const op=currentAction(), dx=f.b[0]-f.a[0],dy=f.b[1]-f.a[1];
           const px=f.a[0]+x-f.x,py=f.a[1]+y-f.y;
           const progress=U.clamp(((px-f.a[0])*dx+(py-f.a[1])*dy)/(dx*dx+dy*dy),0,1);
           f.near=Math.hypot(px-f.b[0],py-f.b[1])<31&&progress>.62;
           f.point=[U.clamp(px,24,width-24),U.clamp(py,24,height-24)];
           actionDestination.classList.toggle('is-near',f.near);
+          const mistake=currentAlternate()?.[0];
+          if(mistake==='tilt'){
+            const tilt=.096*(1-((px-f.a[0])*dx+(py-f.a[1])*dy)/Math.max(1,dx*dx+dy*dy));
+            hazardDrag={id:mistake,tilt:U.clamp(tilt,-.18,.44)};
+          } else if(mistake==='cotton'){
+            const depth=op.from.clone().project(camera).z;
+            const offset=V(2*(f.sourcePoint[0]+x-f.x)/width-1,1-2*(f.sourcePoint[1]+y-f.y)/height,depth).unproject(camera).sub(op.from);
+            hazardDrag={id:mistake,cottonOffset:offset};
+          }
           time=U.lerp(op.start,op.end,progress);
           request();
         }
@@ -1636,21 +1766,50 @@
           }
           if(f.point&&drop) actionPointerMove(e);
           suppressActionClick=performance.now()+400;
+          const pose=hazardDrag;
+          const r=stage.getBoundingClientRect();
+          const inView=onCanvas([e.clientX-r.left,e.clientY-r.top]);
           clearActionDrag();
+          if(f.alternate){
+            alternateDestination.classList.remove('is-near');
+            if(drop&&inView&&f.near){demonstrateMistake(f.alternate.id,pose);return;}
+            alternateSelected=drop&&!f.point;
+            syncAction();request();
+            if(alternateSelected) alternateDestination.focus({preventScroll:true});
+            return;
+          }
           if(drop&&f.near){acceptAction();return;}
+          if(drop&&inView&&pose?.id==='tilt'&&pose.tilt>.10){
+            demonstrateMistake('tilt',{tilt:pose.tilt});return;
+          }
+          if(drop&&inView&&pose?.id==='cotton'&&f.point&&Math.hypot(f.point[0]-f.a[0],f.point[1]-f.a[1])>25){
+            demonstrateMistake('cotton',{cottonOffset:pose.cottonOffset});return;
+          }
           time=currentAction().start;
           if(!f.point&&drop) heldSource=!heldSource;
           syncAction();request();
         }
         actionSource.addEventListener('pointerdown',e=>actionPointerDown(e,true));
+        alternateSource.addEventListener('pointerdown',e=>actionPointerDown(e,'alternate'));
         document.addEventListener('pointermove',actionPointerMove);
         document.addEventListener('pointerup',e=>actionPointerEnd(e,true));
         document.addEventListener('pointercancel',e=>actionPointerEnd(e,false));
         actionSource.addEventListener('click',e=>{
           if(currentAction()?.kind==='preheat') return;
           if(e.detail!==0&&performance.now()<suppressActionClick) return;
+          alternateSelected=false;
           heldSource=!heldSource;syncAction();
           if(heldSource) actionDestination.focus({preventScroll:true});
+        });
+        alternateSource.addEventListener('click',e=>{
+          if(e.detail!==0&&performance.now()<suppressActionClick) return;
+          if(!currentAlternate()||reaction||failureDemo) return;
+          heldSource=false;alternateSelected=!alternateSelected;syncAction();request();
+          if(alternateSelected) alternateDestination.focus({preventScroll:true});
+        });
+        alternateDestination.addEventListener('click',()=>{
+          const entry=currentAlternate();
+          if(alternateSelected&&entry) demonstrateMistake(entry[0]);
         });
         actionSource.addEventListener('keydown',e=>{
           if(currentAction()?.kind!=='preheat'||!['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) return;
@@ -1676,7 +1835,83 @@
           enterAction();
           actionSource.focus({preventScroll:true});
         });
+        const demoWaterMat=flat(p=>mix(p.water,new T.Color(0x43a9f5),.56),{depthWrite:false});
+        const demoPowderMat=flat(p=>mix(p.purple,p.fg,.15),{depthWrite:false});
+        const demoWater=Array.from({length:24},()=>mesh(dotGeo,demoWaterMat,0,0,0,scene,9));
+        const demoPowder=Array.from({length:19},()=>mesh(crystalGeo,demoPowderMat,0,0,0,scene,9));
+        const demoCrack=new T.Group();
+        for(const points of [
+          [[.20,.28,.15],[.11,.46,.30],[.19,.56,.27],[.05,.75,.33],[-.05,.87,.32]],
+          [[.11,.46,.30],[-.02,.47,.33],[-.16,.34,.28]],
+          [[.05,.75,.33],[.25,.80,.23],[.28,.93,.19]]
+        ]){
+          for(let i=1;i<points.length;i++){
+            const crack=chord(points[i-1],points[i],.014,flat(()=>new T.Color(0x663a39),{depthWrite:false}),demoCrack,10);
+            crack.visible=true;
+          }
+        }
+        tube.add(demoCrack);
+        for(const piece of [...demoWater,...demoPowder,demoCrack]) piece.visible=false;
+        function renderFailureDemo(progress){
+          const id=failureDemo?.id;
+          demoCrack.visible=(id==='tilt'||id==='order')&&progress>=.82;
+          const pipePoint=(t,target)=>{
+            if(t<sleeveStart) return target.copy(pipeRoute.getPoint(t)).applyQuaternion(proximalPipe.quaternion).add(proximalPipe.position);
+            if(t<=sleeveEnd){
+              return target.copy(jointStart).lerp(jointEnd,(t-sleeveStart)/(sleeveEnd-sleeveStart));
+            }
+            return target.copy(bathPipe.curve.getPoint((t-sleeveEnd)/(1-sleeveEnd)));
+          };
+          const tubePoint=(t,target,offset=0)=>target.set(.16,length-.14-(length-.46)*t,.09+offset)
+            .applyQuaternion(tube.quaternion).add(tube.position);
+          demoWater.forEach((drop,i)=>{
+            const position=drop.position;
+            drop.visible=false;
+            if(id==='tilt'&&i<9){
+              const beadProgress=(progress-.16-i*.057)/.57;
+              drop.visible=beadProgress>=0&&beadProgress<1.38;
+              if(drop.visible){
+                const travel=U.smoothstep(beadProgress,.18,.99);
+                tubePoint(travel,position,Math.sin(i*1.8)*.07);
+                position.y+=.05*Math.sin(i*1.8);
+                drop.scale.set(.044+.004*(i%4),.05+.004*(i%3),.045);
+              }
+            } else if(id==='order'){
+              const wave=(progress-.24)/.56-i*.021;
+              drop.visible=wave>=0;
+              if(drop.visible){
+                if(wave<=.67) pipePoint(1-wave/.67,position);
+                else tubePoint(U.clamp((wave-.67)/.33,0,1),position,Math.sin(i*2)*.045);
+                drop.scale.setScalar(i===0?.072:.055);
+              }
+            }
+          });
+          demoPowder.forEach((grain,i)=>{
+            if(id!=='cotton'){grain.visible=false;return;}
+            const travel=(progress-.12-i*.028)/.47;
+            grain.visible=travel>=0;
+            if(!grain.visible) return;
+            if(travel<.56){
+              tubePoint(1-travel/.56,grain.position,Math.sin(i*1.9)*.085);
+              grain.position.y+=Math.sin(i*2.7+travel*8)*.09;
+            } else{
+              const deposited=.25+(i%7)*.026;
+              pipePoint(Math.min((travel-.56)*.68,deposited),grain.position);
+              grain.position.z+=Math.sin(i*1.9)*.039;
+            }
+            grain.rotation.set(i*1.7,travel*2,i*2.3);
+            grain.scale.setScalar(.035+.008*(i%3));
+          });
+        }
         function model(at) {
+          const demoId=failureDemo?.id;
+          const demoProgress=failureDemo?.progress??0;
+          const simulatedHeat=demoId==='cotton'||demoId==='tilt';
+          drawModel(at,simulatedHeat?3:step,simulatedHeat?heatingAt:demoId==='order'?0:time,demoProgress);
+        }
+        function drawModel(at,step,time,demoProgress) {
+          const demoId=failureDemo?.id;
+          const scope=(i,t)=>step>i||(step===i&&time>=t);
           const ease=(from,to)=>U.smoothstep(time,from,to);
           const clampProgress=assembled?(step>2?1:step===2?ease(tiltEnd,heightAt):0):0;
           const lampZCorrection=tubeZ-lampZ;
@@ -1687,6 +1922,7 @@
           const tubeLift=heatingHeight*clampProgress;
           const preheatOffset=step===3&&assembled&&time>=matchAwayAt?(preheatX-lampX)*(1-ease(preheatedAt,heatingAt)):0;
           lampBodyGroup.position.set(preheatOffset,0,lampAimZ);
+          if(hazardDrag?.id==='tilt'&&hazardDrag.lampOffset) lampBodyGroup.position.add(hazardDrag.lampOffset);
           alignedWick.copy(wick).add(V(0,.015,lampZCorrection));
           lampGrip.z=lampZ+lampZCorrection;
           preheatGrip.copy(lampGrip).setX(preheatX);
@@ -1753,8 +1989,10 @@
           }
 
           const open=assembled&&step===1;
-          for(const piece of [stopper,stopperLip,holeEdge]) piece.visible=!open;
-          pipeGroup.visible=placed.has('pipe')&&!open;
+          const looseStopper=open&&time>=4.83;
+          for(const piece of [stopper,stopperLip,holeEdge]) piece.visible=!open||looseStopper;
+          pipeGroup.visible=placed.has('pipe')&&(!open||looseStopper);
+          inletPipe.visible=sleeveCollars[0].visible=sleeveCollars[1].visible=rubberJoint.visible=distalPipe.visible=!open;
           const dried=assembled&&scope(5,.75);
           const useBath=assembled&&!inBath&&!dried;
           const inserting=assembled&&step===4&&time>=bubblesReadyAt&&time<fillStart;
@@ -1778,7 +2016,9 @@
           jaws[1].position.z=jawOpening;
           const insert=ease(.40,2.08), out=ease(3.50,4.50);
           const tips=ease(2.08,2.73)-ease(4.35,5.05);
-          const tiltOffset=loading?.096+.205*tips:assembled&&step===2?.096*(1-ease(tiltStart,tiltEnd)):0;
+          const tiltOffset=demoId==='tilt'?failureDemo.tilt??.17:
+            hazardDrag?.id==='tilt'&&hazardDrag.tilt!=null?hazardDrag.tilt:
+            loading?.096+.205*tips:assembled&&step===2?.096*(1-ease(tiltStart,tiltEnd)):0;
           const tiltPose=new T.Quaternion().setFromAxisAngle(zAxis,tiltOffset);
           tube.quaternion.copy(tubeBase).premultiply(tiltPose);
           tube.position.copy(closed);
@@ -1789,6 +2029,10 @@
           proximalPipe.quaternion.copy(tiltPose);
           proximalPipe.position.copy(tube.position).sub(closed.clone().applyQuaternion(tiltPose));
           proximalPipe.position.add(V(.75,.30,.34).multiplyScalar(stopperShift));
+          if(looseStopper){
+            proximalPipe.position.addScaledVector(alternateActions.cotton.from,.99).addScaledVector(alternateActions.cotton.to,-.99);
+            if(hazardDrag?.id==='cotton'&&hazardDrag.stopperOffset) proximalPipe.position.add(hazardDrag.stopperOffset);
+          }
           updateTankConnection();
           for(const [i,at] of tubePins) parts[i].xyz.copy(at).applyQuaternion(tiltPose).add(tube.position);
           for(const [i,at] of inletPins) parts[i].xyz.copy(at).applyQuaternion(tiltPose).add(proximalPipe.position);
@@ -1804,12 +2048,15 @@
             }
             crystals[i].visible=assembled&&(step>1||loading&&drop>=.997);
           });
-          const cottonIn=loading?ease(4.83,5.52):1;
+          const cottonOffset=demoId==='cotton'?failureDemo.cottonOffset:hazardDrag?.id==='cotton'?hazardDrag.cottonOffset:null;
+          const cottonIn=demoId==='cotton'||cottonOffset?0:loading?ease(4.83,5.52):1;
+          const localCottonOffset=cottonOffset?.clone().applyQuaternion(tube.quaternion.clone().invert());
           cottonTufts.forEach((ob,i)=>{
-            ob.visible=assembled&&(step>1||loading&&time>=4.83);
+            ob.visible=assembled&&(demoId==='cotton'?!!localCottonOffset&&demoProgress<.16:step>1||loading&&time>=4.83);
             ob.position.copy(cottonHome[i]);
             ob.position.y+=(1-cottonIn)*1.14;
             ob.position.x-=(1-cottonIn)*.35;
+            if(localCottonOffset) ob.position.add(localCottonOffset);
             ob.scale.setScalar(.08+cottonIn*.023);
           });
           parts[0].relevant=crystals[0].visible;parts[7].relevant=cottonTufts[0].visible;
@@ -1819,7 +2066,7 @@
           towel.position.copy(towelStart).lerp(towelEnd,ease(0,.74));
           const towelContact=ease(0,.74);
           towel.rotation.set(.12*(1-towelContact),.08*(1-towelContact),-.14+.045*towelContact);
-          matchBox.visible=match.visible=assembled&&step===3;
+          matchBox.visible=match.visible=assembled&&step===3&&!demoId;
           if(match.visible){
             const contactAt=.27, sparksAt=.69, sparksOut=.97;
             if(time<contactAt){
@@ -1854,15 +2101,16 @@
             }
           }
           lampCap.visible=placed.has('lamp');
-          const capProgress=step>6?1:step===6?ease(0,.84):0;
+          const capProgress=demoId==='order'?1:step>6?1:step===6?ease(0,.84):0;
           lampCap.position.copy(capRest).lerp(V(lampX,burnerSeat,lampZ+lampAimZ),capProgress);
           lampCap.position.y+=.75*Math.sin(Math.PI*capProgress);
+          if(hazardDrag?.id==='order'&&hazardDrag.lampOffset) lampCap.position.add(hazardDrag.lampOffset);
           splint.visible=assembled&&verifying&&scope(verificationStep,.92);
           splintFlame.visible=splint.visible&&scope(verificationStep,1.81);
           const down=step>7?1:ease(.92,1.81);
           splint.position.copy(splintRest).lerp(V(laterJar.x,2.66,laterJar.z),down);
           splint.rotation.z=.17;
-          const active=assembled&&scope(3,litAt)&&!scope(6,.84);
+          const active=assembled&&demoId!=='order'&&scope(3,litAt)&&!scope(6,.84);
           flame.visible=active;
           // The glass limits the visible height of the flame along the sloped tube.
           const outerScale=U.clamp((tubeBottomAt(lampAimX+.03+preheatOffset)+tubeLift-flame.position.y)/.93,.62,1);
@@ -1914,6 +2162,7 @@
               ob.quaternion.copy(camera.quaternion);
             }
           }
+          renderFailureDemo(demoProgress);
           gasLabel.hidden=!assembled||p<.30||(verifying&&scope(verificationStep,.92));
           if(!gasLabel.hidden) {
             const [x,y]=coords(collected?V(laterJar.x,1.42,laterJar.z):V(jarX,(3.23+surface)*.5,jarZ).applyQuaternion(jarGroup.quaternion).add(jarGroup.position));
@@ -1930,7 +2179,7 @@
           if(step===5&&time>.75)next=8;
           if(step===6&&time>.84)next=9;
           if(step===7&&time>1.02)next=time<1.81?10:11;
-          if(phase!==next){phase=next;if(assembled) updateNote();}
+          if(!demoId&&phase!==next){phase=next;if(assembled) updateNote();}
         }
         let lastFrame=0;
         function frame(at){
@@ -1940,6 +2189,10 @@
             const progress=U.clamp((at-reaction.start)/(1000*reaction.seconds),0,1);
             time=U.lerp(reaction.from,reaction.end,progress);
             if(progress>=1) advanceAction();
+          }
+          if(failureDemo&&failureDemo.progress<1){
+            failureDemo.progress=Math.min(1,Math.max(0,(at-failureDemo.at)/(alternateActions[failureDemo.id].seconds*1000)));
+            if(failureDemo.progress===1) finishMistake();
           }
           const edgeInput=(point,size)=>U.clamp((30-point)/30,0,1)-U.clamp((point-size+30)/30,0,1);
           const atEdge=drag?.inside&&!drag.hit;
@@ -1964,7 +2217,7 @@
             if(currentAction()?.kind==='preheat'&&!reaction) layoutPreheat();
             else layoutAction();
           } else layoutTargets();
-          if(scrolling||reaction||assembled&&step===4&&currentAction()?.start===bubblesReadyAt) request();
+          if(scrolling||reaction||failureDemo&&failureDemo.progress<1||assembled&&step===4&&currentAction()?.start===bubblesReadyAt) request();
         }
         function request(){if(!raf) raf=requestAnimationFrame(frame);}
         scene.add(pitcher);
