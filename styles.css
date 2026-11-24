@@ -62,7 +62,7 @@ h1 { font-size: .99rem; font-weight: 700; }
   min-height: 45px;
   padding: 3px 12px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   column-gap: 7px;
   border-bottom: 1px solid var(--line);
@@ -73,6 +73,9 @@ h1 { font-size: .99rem; font-weight: 700; }
 .steps li[aria-current="step"] { background: var(--selected); color: var(--accent-text); font-weight: 650; }
 .steps li[data-complete] { color: #4a5566; }
 .lab-tools { display: flex; align-items: center; gap: 3px; }
+.lab-mode { display: flex; justify-self: end; align-items: center; padding: 2px; gap: 2px; border: 1px solid var(--line); border-radius: 6px; }
+.lab-mode .btn { min-height: 31px; padding-inline: 7px; white-space: nowrap; font-size: .8rem; }
+.lab-mode .btn[aria-pressed="true"] { background: var(--selected); color: var(--accent-text); font-weight: 650; }
 .lab-tools [data-lab="pan"][aria-pressed="true"] { color: var(--accent-text); background: var(--selected); }
 .play { justify-self: end; white-space: nowrap; }
 
@@ -131,6 +134,13 @@ h1 { font-size: .99rem; font-weight: 700; }
 .lab-stage[data-view="pan"] .lab-canvas { cursor: move; }
 .lab-overlay { pointer-events: none; }
 .lab-interactions { z-index: 2; }
+.lab-confirm-bubbles { position: absolute; z-index: 3; right: 10px; bottom: 10px; min-height: 42px; }
+[data-learning-mode="free"] :is(.lab-action-line,.lab-preheat-rail,.lab-target,.lab-action-source,.lab-action-destination) { opacity: 0; pointer-events: none; }
+[data-learning-mode="free"] .lab-stage :is(.lab-action-source,.lab-action-destination):focus-visible { opacity: 1; }
+[data-learning-mode="free"] .lab-stage [data-kind="drag"] .lab-action-hint,
+[data-learning-mode="free"] .lab-stage [data-kind="preheat"] .lab-action-hint,
+[data-learning-mode="free"] .lab-stage [data-kind="observe"] .lab-action-hint,
+[data-learning-mode="free"] .inspector :is([aria-labelledby="observation-title"],.step-detail) { display: none; }
 .lab-action-hint {
   position: absolute;
   z-index: 3;
@@ -370,6 +380,8 @@ h1 { font-size: .99rem; font-weight: 700; }
   .steps { gap: 1px; }
   .steps li { padding-inline: 5px; }
   .lab-tools { grid-column: 1 / -1; grid-row: 2; justify-self: end; }
+  .lab-mode { grid-column: 2; grid-row: 1; }
+  .play { grid-column: 1; grid-row: 2; justify-self: start; }
   .workbench { grid-template-columns: minmax(0, 1fr); }
   .toolbox, .inspector { border-inline: 0; }
   .toolbox { border-bottom: 1px solid var(--line); }

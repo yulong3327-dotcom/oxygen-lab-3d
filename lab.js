@@ -422,6 +422,8 @@
         };
         const bathPipe=alternatePipe([V(1.91,.50,.32),V(1.79,.55,.88)]);
         const dryPipe=alternatePipe([V(1.99,1.12,-.02),V(2.91,1.05,-.34)]);
+        collectorTube.visible=outlet.visible=false;
+        bathPipe.segment.visible=bathPipe.ring.visible=true;
         const pipeGroup=finishInstrument('pipe');
         for(const piece of [stopper,stopperLip,holeEdge]) pipeGroup.attach(piece);
         const proximalPipe=new T.Group();
@@ -570,6 +572,16 @@
         }
         updateJar(.49, 3.23, false);
         const jarGroup=finishInstrument('jar');
+        const laterJar=V(4.04,0,-2.03);
+        const jarPivot=V(jarX,1.735,jarZ), jarRestPivot=V(laterJar.x,1.67,laterJar.z);
+        function poseJar(mix=0,lift=0){
+          jarGroup.rotation.z=Math.PI*(1-mix);
+          jarGroup.position.copy(jarRestPivot).lerp(jarPivot,mix)
+            .sub(jarPivot.clone().applyQuaternion(jarGroup.quaternion));
+          jarGroup.position.y+=lift;
+        }
+        poseJar();
+        jarWaterMesh.visible=jarSurface.visible=meniscus.visible=false;
         const lid=mesh(new T.CylinderGeometry(.648,.648,.034,56),glassEdge,jarX,.45,jarZ,jarGroup,9);
         const lidRim=torus(.642,.013,glassRim,jarX,.448,jarZ,jarGroup,10);
         lidRim.rotation.x=Math.PI/2;
@@ -697,6 +709,7 @@
         const oxy=flat(p=>mix(p.oxygen,p.bg,.17),{transparent:true,opacity:.93,depthWrite:false});
         const bubbleMaterial=glass(p=>mix(p.oxygen,p.water,.35),.95);
         const bubbleRim=flat(p=>mix(p.oxygen,p.bg,.08),{transparent:true,opacity:.62,depthWrite:false});
+        const highlightedBubbleRim=flat(p=>mix(p.water,p.bg,.13),{transparent:true,opacity:.98,depthWrite:false});
         const dotGeo=new T.SphereGeometry(1,12,10), ringGeo=new T.TorusGeometry(1,.13,5,20);
         const dots=Array.from({length:13},()=>mesh(dotGeo,oxy,0,0,0,scene,11));
         const bubbles=Array.from({length:10},()=>{
@@ -748,7 +761,7 @@
           ['lamp','酒精灯','flame',[-3.88,.56,.43],[-14,17]],
           ['pipe','带塞导管','route',[.66,1.72,.32],[1,-24]],
           ['tank','水槽','waves',[4.0,.53,1.14],[13,20]],
-          ['jar','集气瓶','cylinder',[2.68,2.88,.32],[20,-18]]
+          ['jar','集气瓶','cylinder',[laterJar.x,2.18,laterJar.z],[20,-18]]
         ];
         const targets = el('targets');
         const ghost=new Map();
@@ -909,6 +922,7 @@
         function updateDragPosition(){
           const {slot,pointer:{x,y,type}}=drag;
           drag.inside=x>=0&&y>=0&&x<=width&&y<=height;
+          if(x>30&&x<width-30&&y>30&&y<height-30) drag.edgeReady=true;
           drag.avatar.hidden=drag.inside;
           drag.hit=false;
           if(drag.inside){
@@ -982,7 +996,7 @@
             item.toggleAttribute('data-current',current);
             item.setAttribute('aria-pressed',String(id===chosen));
             apparatus.get(id).visible=inPlace;
-            ghost.get(id).visible=current;
+            ghost.get(id).visible=current&&!freeMode;
             for(const obj of guideMeshes[id]) obj.material=id===chosen?hotGuideMat:guideMat;
             btn.hidden=!current;
             btn.classList.toggle('is-target',id===chosen);
@@ -1015,7 +1029,7 @@
           updateAssembly();
           if(assembled){
             assemblyNote('仪器已装齐。先检查装置气密性。','oxygen');
-            if(document.activeElement===slotList.find(s=>s.id===id).btn) actionSource.focus();
+            if(!freeMode&&document.activeElement===slotList.find(s=>s.id===id).btn) actionSource.focus();
           } else {
             const next=nextInstrument();
             assemblyNote(slotList.find(s=>s.id===id).name+'已就位。下一件：'+next.name+'。','oxygen');
@@ -1235,13 +1249,13 @@
             }
           }
           canvas.setPointerCapture(e.pointerId);
-          fingers.set(e.pointerId,{x:e.clientX,y:e.clientY,pan});
+          fingers.set(e.pointerId,{x:e.clientX,y:e.clientY,pan,moved:fingers.size>0});
         });
         canvas.addEventListener('pointermove',e=>{
           if(!fingers.has(e.pointerId)) return;
           const old=fingers.get(e.pointerId), gap=fingers.size===2?distance():0;
           const dx=e.clientX-old.x,dy=e.clientY-old.y;
-          fingers.set(e.pointerId,{x:e.clientX,y:e.clientY,pan:old.pan});
+          fingers.set(e.pointerId,{x:e.clientX,y:e.clientY,pan:old.pan,moved:old.moved||!!(dx||dy)});
           if(fingers.size===2&&gap>0){
             panCanvas(dx/2,dy/2);
             changeZoom(distance()/gap);
@@ -1255,7 +1269,16 @@
             request();
           }
         });
-        ['pointerup','pointercancel','lostpointercapture'].forEach(evt=>canvas.addEventListener(evt,e=>fingers.delete(e.pointerId)));
+        canvas.addEventListener('pointerup',e=>{
+          const pointer=fingers.get(e.pointerId);
+          if(freeMode&&!assembled&&chosen&&fingers.size===1&&pointer&&!pointer.pan&&!pointer.moved){
+            const r=stage.getBoundingClientRect(),slot=nextInstrument();
+            const [x,y]=coords(slot.xyz);
+            if(Math.hypot(x+r.left-e.clientX,y+r.top-e.clientY)<(e.pointerType==='touch'?34:28)) place(slot.id,chosen);
+          }
+          fingers.delete(e.pointerId);
+        });
+        ['pointercancel','lostpointercapture'].forEach(evt=>canvas.addEventListener(evt,e=>fingers.delete(e.pointerId)));
 
         const waterFullAt=1.5, prepCapAt=2.25, immerseAt=3.85, uncoverAt=4.64;
         const bubblesReadyAt=8.24, fillStart=8.89, fillEnd=16.64, outletClearAt=17.24, capAt=18.05, liftAt=19.65;
@@ -1268,7 +1291,7 @@
           porcelain,lampX,burnerSeat,lampZ);
         lampCap.name='Porcelain snuffer cap';
         lampCap.visible=false;
-        const laterJar=V(4.04,0,-2.03), zAxis=V(0,0,1);
+        const zAxis=V(0,0,1);
         const originalJarPin=parts[3].xyz.clone();
         const originalLampPin=parts[4].xyz.clone();
         const tubePins=[0,7].map(i=>[i,parts[i].xyz.clone().sub(closed)]);
@@ -1291,7 +1314,7 @@
         const capSeatGrip=V(lampX,burnerSeat+.22,lampZ);
         const capRest=V(lampX+.85,.07,lampZ+.51);
         const jarPark=V(laterJar.x,2.35,laterJar.z), jarBath=V(jarX,2.18,jarZ);
-        const testMouth=V(laterJar.x,3.01,laterJar.z);
+        const testMouth=V(laterJar.x,jarRestPivot.y+jarPivot.y-.45,laterJar.z);
         const jarMouthWet=V(jarX,.45,jarZ), waterPlateRest=V(1.2,.205,.70);
         const prepPlateRest=testMouth.clone().add(V(-1.15,-2.91,.31));
         const pitcherRest=testMouth.clone().add(V(1.08,-2.91,.21));
@@ -1309,8 +1332,6 @@
         const morphTube=mesh(new T.BufferGeometry(),pipeGlass,0,0,0,distalPipe,7);
         const morphTip=torus(.077,.014,glassRim,0,0,0,distalPipe,8);
         const wetPipe=new PipeSection(sleeveEnd,1);
-        const jarPivot=V(jarX,1.735,jarZ);
-        const jarRestPivot=V(laterJar.x,1.735,laterJar.z);
         let tubePose='', outletBlend;
         function bendOutlet(from,to,progress,pose){
           const quantized=Math.round(U.clamp(progress,0,1)*24)/24;
@@ -1328,7 +1349,10 @@
         const grip=(source,destination,from,to,start,end,hint,finish=end)=>({source,destination,from,to,start,end,finish,hint});
         const observe=(start,end,hint,seconds)=>({start,end,hint,seconds});
         const actions=[
-          [grip('热毛巾','试管底部',towelStart,towelEnd,0,.74,'把热毛巾移到空试管底部，观察水中导管口。',2.30)],
+          [
+            grip('热毛巾','试管底部',towelStart,towelEnd,0,.74,'把热毛巾移到空试管底部，观察水中导管口。',2.30),
+            {kind:'confirm-bubbles',start:2.30,hint:'观察高亮的气泡。确认气泡均匀冒出后，再进入下一步。'}
+          ],
           [
             grip('装药纸槽','试管底部',V(.34,2.65,.66),V(-3.85,2.65,.66),.40,2.08,'把盛有高锰酸钾的纸槽推到试管底部。'),
             grip('试管口','抬高到这里',V(-.66,2.59,.70),V(-.66,3.40,.70),2.08,2.73,'抬高试管口，让高锰酸钾滑落到管底。',3.50),
@@ -1395,7 +1419,9 @@
             seconds:3.4
           }
         };
-        const currentAlternate=()=>Object.entries(alternateActions).find(([,op])=>op.step===step&&op.index===actionIndex);
+        let freeMode=false;
+        root.dataset.learningMode='guided';
+        const currentAlternate=()=>freeMode?Object.entries(alternateActions).find(([,op])=>op.step===step&&op.index===actionIndex):undefined;
         let failureDemo=null,hazardDrag=null;
         const actionOverlay=el('interactions');
         const actionLine=document.createElement('div');
@@ -1456,6 +1482,24 @@
         const finished=()=>step>=verificationStep&&!(step===verificationStep&&verifying);
         const currentAction=()=>finished()?null:actions[step]?.[actionIndex];
         const verificationButton=el('verify-oxygen');
+        const confirmBubbles=el('confirm-bubbles');
+        const guidedButton=el('guided-mode'),freeButton=el('free-mode');
+        function setLearningMode(free){
+          if(free===freeMode||drag||actionTouch||failureDemo) return;
+          freeMode=free;heldSource=false;alternateSelected=false;
+          root.dataset.learningMode=free?'free':'guided';
+          guidedButton.setAttribute('aria-pressed',String(!free));
+          freeButton.setAttribute('aria-pressed',String(free));
+          if(assembled){syncAction();request();}
+          else updateAssembly();
+        }
+        guidedButton.addEventListener('click',()=>setLearningMode(false));
+        freeButton.addEventListener('click',()=>setLearningMode(true));
+        confirmBubbles.addEventListener('click',()=>{
+          if(currentAction()?.kind!=='confirm-bubbles'||reaction||failureDemo) return;
+          advanceAction();
+          if(!freeMode) actionSource.focus({preventScroll:true});
+        });
         const mistakeDialog=el('mistake-dialog'),retryStep=el('retry-step');
         let verifying=false;
         let suppressActionClick=0;
@@ -1501,12 +1545,13 @@
           el('play').hidden=!done;
           el('play').disabled=!done;
           verificationButton.hidden=!done||step!==verificationStep;
+          confirmBubbles.hidden=!assembled||op?.kind!=='confirm-bubbles'||!!reaction;
           actionOverlay.hidden=!assembled;
           el('lines').toggleAttribute('hidden',!done);
           if(!assembled) return;
           const manual=!!op?.source&&!reaction&&!failureDemo, preheating=manual&&op.kind==='preheat';
           const alternate=manual&&currentAlternate()?.[1];
-          actionOverlay.dataset.kind=failureDemo?'mistake':preheating?'preheat':manual?'drag':'observe';
+          actionOverlay.dataset.kind=failureDemo?'mistake':done?'complete':preheating?'preheat':manual?'drag':'observe';
           alternateSource.hidden=!alternate;
           alternateDestination.hidden=!alternate||!alternateSelected&&!hazardDrag?.alternate;
           alternateSource.setAttribute('aria-pressed',String(alternateSelected));
@@ -1549,8 +1594,8 @@
           const op=currentAction();
           if(op){
             time=op.start;
-            if(step===4&&op.start===bubblesReadyAt) steadyAt=performance.now();
-            if(!op.source){
+            if(step===4&&op.start===bubblesReadyAt||op.kind==='confirm-bubbles') steadyAt=performance.now();
+            if(!op.source&&op.kind!=='confirm-bubbles'){
               runReaction(op.end,reduced.matches?.26:op.seconds??1.65);
               return;
             }
@@ -1558,7 +1603,7 @@
           syncAction();request();
         }
         function advanceAction(){
-          const keyboard=document.activeElement===actionSource||document.activeElement===actionDestination||reaction?.keyboard;
+          const keyboard=!freeMode&&(document.activeElement===actionSource||document.activeElement===actionDestination||reaction?.keyboard);
           reaction=null;heldSource=false;alternateSelected=false;actionIndex++;
           if(actionIndex>=actions[step].length){
             step++;actionIndex=0;refreshProcedure();
@@ -1619,11 +1664,11 @@
           const from=coords(op.from),to=coords(op.to),visible=onCanvas(from)&&onCanvas(to);
           actionSource.style.visibility=actionDestination.style.visibility=actionLine.style.visibility=visible?'':'hidden';
           const keepButtonInView=([x,y])=>[U.clamp(x,margin,width-margin),U.clamp(y,margin,height-margin)];
-          const sourcePoint=keepButtonInView(from), b=keepButtonInView(to);
-          const a=step===0
+          const sourcePoint=freeMode?from:keepButtonInView(from), b=freeMode?to:keepButtonInView(to);
+          const a=!freeMode&&step===0
             ? [U.clamp(sourcePoint[0]+(width<520?35:46),margin,width-margin),Math.max(margin,sourcePoint[1]-13)]
             : sourcePoint;
-          if(Math.hypot(b[0]-a[0],b[1]-a[1])<49){
+          if(!freeMode&&Math.hypot(b[0]-a[0],b[1]-a[1])<49){
             const choices=[[a[0]+52,a[1]],[a[0]-52,a[1]],[a[0],a[1]+52],[a[0],a[1]-52]];
             const valid=choices.filter(([x,y])=>x>=margin&&x<=width-margin&&y>=margin&&y<=height-margin);
             valid.sort((c,d)=>Math.hypot(c[0]-b[0],c[1]-b[1])-Math.hypot(d[0]-b[0],d[1]-b[1]));
@@ -1660,8 +1705,8 @@
             const cost=p=>distance(p,anchor)+avoid.reduce((sum,point)=>sum+8*Math.max(0,43-distance(p,point)),0);
             return candidates.reduce((best,p)=>cost(p)<cost(best)?p:best);
           };
-          const a=place(from,occupied);
-          const b=place(to,[...occupied,a]);
+          const a=freeMode?from:place(from,occupied);
+          const b=freeMode?to:place(to,[...occupied,a]);
           const onScreen=actionTouch?.alternate&&actionTouch.point?actionTouch.point:a;
           for(const [btn,[x,y]] of [[alternateSource,onScreen],[alternateDestination,b]]){
             btn.style.left=x+'px';btn.style.top=y+'px';
@@ -1692,7 +1737,7 @@
           const alt=layoutAlternate([path.a,path.b],([a,b])=>[U.clamp(a,24,width-24),U.clamp(b,24,height-24)]);
           const mainDistance=Math.hypot(x-path.sourcePoint[0],y-path.sourcePoint[1]);
           const altDistance=alt?Math.hypot(x-alt.from[0],y-alt.from[1]):Infinity;
-          const alternate=alt&&(handle==='alternate'||!handle&&altDistance<30&&altDistance<mainDistance);
+          const alternate=alt&&(handle==='alternate'||!handle&&altDistance<(e.pointerType==='touch'?32:28)&&altDistance<mainDistance);
           if(handle==='alternate'&&!alternate||!handle&&!alternate&&mainDistance>39) return false;
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -1735,8 +1780,10 @@
           }
           const op=currentAction(), dx=f.b[0]-f.a[0],dy=f.b[1]-f.a[1];
           const px=f.a[0]+x-f.x,py=f.a[1]+y-f.y;
-          const progress=U.clamp(((px-f.a[0])*dx+(py-f.a[1])*dy)/(dx*dx+dy*dy),0,1);
-          f.near=Math.hypot(px-f.b[0],py-f.b[1])<31&&progress>.62;
+          const progress=U.clamp(((px-f.a[0])*dx+(py-f.a[1])*dy)/Math.max(1,dx*dx+dy*dy),0,1);
+          const dropRadius=freeMode?(e.pointerType==='touch'?25:19):31;
+          const minProgress=freeMode&&Math.hypot(dx,dy)<24?.32:.62;
+          f.near=Math.hypot(px-f.b[0],py-f.b[1])<dropRadius&&progress>minProgress;
           f.point=[U.clamp(px,24,width-24),U.clamp(py,24,height-24)];
           actionDestination.classList.toggle('is-near',f.near);
           const mistake=currentAlternate()?.[0];
@@ -1941,17 +1988,8 @@
           const jarTravel=dippingJar?(time-prepCapAt)/(immerseAt-prepCapAt):liftingJar?1-(time-capAt)/(liftAt-capAt):inTank?1:0;
           const jarMix=U.smoothstep(jarTravel,.20,.78);
           const jarLift=movingJar?1.12*(U.smoothstep(jarTravel,0,.24)-U.smoothstep(jarTravel,.74,1)):0;
-          if(assembled){
-            jarGroup.rotation.z=Math.PI*(1-jarMix);
-            jarGroup.position.copy(jarRestPivot).lerp(jarPivot,jarMix)
-              .sub(jarPivot.clone().applyQuaternion(jarGroup.quaternion));
-            jarGroup.position.y+=jarLift;
-            parts[3].xyz.copy(originalJarPin).applyQuaternion(jarGroup.quaternion).add(jarGroup.position);
-          } else {
-            jarGroup.rotation.z=0;
-            jarGroup.position.set(0,0,0);
-            parts[3].xyz.copy(originalJarPin);
-          }
+          poseJar(assembled?jarMix:0,assembled?jarLift:0);
+          parts[3].xyz.copy(originalJarPin).applyQuaternion(jarGroup.quaternion).add(jarGroup.position);
           parts[4].xyz.copy(originalLampPin).add(lampBodyGroup.position);
           const showingWater=assembled&&step===4&&waterLoaded>0&&p<1;
           if(showingWater) updateJar(prep?U.lerp(3.23,.49,waterLoaded):.49,surface,prep);
@@ -1994,7 +2032,7 @@
           pipeGroup.visible=placed.has('pipe')&&(!open||looseStopper);
           inletPipe.visible=sleeveCollars[0].visible=sleeveCollars[1].visible=rubberJoint.visible=distalPipe.visible=!open;
           const dried=assembled&&scope(5,.75);
-          const useBath=assembled&&!inBath&&!dried;
+          const useBath=!inBath&&!dried;
           const inserting=assembled&&step===4&&time>=bubblesReadyAt&&time<fillStart;
           const clearing=assembled&&step===4&&time>fillEnd&&time<outletClearAt;
           const pulling=assembled&&step===5&&time<.75;
@@ -2140,6 +2178,9 @@
           }
           const waitingForBubbles=step===4&&time>=uncoverAt&&time<bubblesReadyAt;
           const steadyBubbles=step===4&&time>=bubblesReadyAt&&time<=fillEnd;
+          const leakConfirmedReady=step===0&&currentAction()?.kind==='confirm-bubbles';
+          const leakElapsed=step===0?Math.max(0,time-.61)+(leakConfirmedReady?Math.max(0,(at-steadyAt)/1000):0):0;
+          const leakHighlight=step===0&&time>=1.68;
           const bubbleTime=waitingForBubbles?time-uncoverAt:
             inBath?time-fillStart:time>=bubblesReadyAt?bubblesReadyAt-uncoverAt+Math.max(0,(at-steadyAt)/1000):0;
           const regularAfter=1.65, bubbleSpacing=.22;
@@ -2148,17 +2189,18 @@
             const checking=step===0&&time>.61;
             const emits=waitingForBubbles||steadyBubbles;
             const sparse=waitingForBubbles&&bubbleTime<regularAfter;
-            const elapsed=checking?time-.61-i*.16:sparse?bubbleTime-(sparseAt[i]??Infinity):
+            const elapsed=checking?leakElapsed-i*.20:sparse?bubbleTime-(sparseAt[i]??Infinity):
               bubbleTime-(inBath?0:regularAfter)-i*bubbleSpacing;
             const age=sparse?elapsed:elapsed%(bubbles.length*bubbleSpacing);
             const start=inBath?mouthWet:inserting?morphTip.position:bathPipe.end;
-            const y=start.y+age*(inBath?1.38:.88);
+            const y=start.y+age*(checking?.58:inBath?1.38:.88);
             const ob=bubbles[i];
             ob.visible=assembled&&(checking||emits)&&elapsed>=0&&y<(inBath?surface-.025:poolLevel+.04);
             if(ob.visible){
               const s=y-start.y;
               ob.position.set(start.x+Math.sin(s*5+i*2.25)*Math.min(.18,s*.14),y,start.z+Math.cos(s*4+i)*Math.min(.16,s*.12));
-              ob.scale.setScalar(.044+(i%4)*.018);
+              ob.children[1].material=leakHighlight?highlightedBubbleRim:bubbleRim;
+              ob.scale.setScalar(leakHighlight?.075+(i%3)*.013:.044+(i%4)*.018);
               ob.quaternion.copy(camera.quaternion);
             }
           }
@@ -2195,7 +2237,7 @@
             if(failureDemo.progress===1) finishMistake();
           }
           const edgeInput=(point,size)=>U.clamp((30-point)/30,0,1)-U.clamp((point-size+30)/30,0,1);
-          const atEdge=drag?.inside&&!drag.hit;
+          const atEdge=drag?.inside&&drag.edgeReady&&!drag.hit;
           const edgeX=atEdge?edgeInput(drag.pointer.x,width):0,edgeY=atEdge?edgeInput(drag.pointer.y,height):0;
           const scrolling=edgeX!==0||edgeY!==0;
           if(scrolling) {
@@ -2208,7 +2250,8 @@
           model(at);
           if(loose){
             const group=apparatus.get(loose.slot.id);
-            group.position.copy(loose.delta);
+            if(group===jarGroup) group.position.add(loose.delta);
+            else group.position.copy(loose.delta);
             group.visible=true;
           }
           renderer.render(scene,camera);
@@ -2217,7 +2260,7 @@
             if(currentAction()?.kind==='preheat'&&!reaction) layoutPreheat();
             else layoutAction();
           } else layoutTargets();
-          if(scrolling||reaction||failureDemo&&failureDemo.progress<1||assembled&&step===4&&currentAction()?.start===bubblesReadyAt) request();
+          if(scrolling||reaction||failureDemo&&failureDemo.progress<1||assembled&&(currentAction()?.kind==='confirm-bubbles'||step===4&&currentAction()?.start===bubblesReadyAt)) request();
         }
         function request(){if(!raf) raf=requestAnimationFrame(frame);}
         scene.add(pitcher);

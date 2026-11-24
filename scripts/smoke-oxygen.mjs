@@ -68,7 +68,9 @@ async function checkOxygen(phone) {
   const alternateDestination = page.locator('[data-action="alternate-destination"]');
   const mistakeDialog = lab('mistake-dialog');
   const retryStep = lab('retry-step');
+  const confirmBubbles = lab('confirm-bubbles');
   const actionStatus = page.locator('.lab-action-hint [role="status"]');
+  const actionHint = page.locator('.lab-action-hint');
   const interactions = lab('interactions');
   const act = locator => phone ? locator.tap() : locator.click();
   const photo = label => page.screenshot({ path: resolve(output, `${name}-${label}.png`), fullPage: true });
@@ -76,6 +78,55 @@ async function checkOxygen(phone) {
   const canvas = lab('canvas');
   const scene = label => canvas.screenshot({ path: resolve(output, `${name}-${label}.png`), scale: 'css',
     style: '.lab-overlay { visibility: hidden !important; }' });
+  const readScene = () => canvas.evaluate(async element => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return element.toDataURL();
+  });
+
+  async function selectMode(mode) {
+    const button = lab(`${mode}-mode`);
+    await act(button);
+    await page.waitForFunction(value => document.querySelector('#oxygen-lab-3d').dataset.learningMode === value, mode);
+    assert.equal(await button.getAttribute('aria-pressed'), 'true');
+  }
+
+  async function freePoint(marker) {
+    return marker.evaluate(element => {
+      const stage = element.closest('[data-lab="stage"]').getBoundingClientRect();
+      return { x: stage.left + parseFloat(element.style.left), y: stage.top + parseFloat(element.style.top) };
+    });
+  }
+
+  async function freeDrag(from, to) {
+    if (!phone) return drag(page, from, to);
+    const cdp = await page.context().newCDPSession(page);
+    const event = (type, point) => cdp.send('Input.dispatchTouchEvent', {
+      type, touchPoints: point ? [{ ...point, id: 1 }] : []
+    });
+    try {
+      await event('touchStart', from);
+      for (let i = 1; i <= 10; i++) {
+        await event('touchMove', { x: from.x + (to.x - from.x) * i / 10, y: from.y + (to.y - from.y) * i / 10 });
+      }
+    } finally {
+      await event('touchEnd');
+      await cdp.detach();
+    }
+  }
+
+  async function confirmStableBubbles(mode) {
+    await confirmBubbles.waitFor({ timeout: 10000 });
+    assert(await confirmBubbles.isEnabled());
+    assert.match(await confirmBubbles.textContent(), /气泡.*均匀/);
+    await photo(`bubbles-${mode}`);
+    await page.waitForTimeout(1100);
+    assert.equal((await current.textContent()).trim()[0], '查', `${name}: the experiment must wait for student confirmation`);
+    assert.equal(await complete.count(), 0);
+    await act(confirmBubbles);
+    await confirmBubbles.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => document.querySelector('[aria-current="step"] .step-label')?.textContent?.trim().startsWith('装'));
+    assert.equal(await complete.count(), 1);
+  }
 
   async function markersReady() {
     await destination.waitFor();
@@ -100,32 +151,38 @@ async function checkOxygen(phone) {
     }
   }
 
-  async function tryMistake(index, mistake) {
-    await alternateSource.waitFor();
-    assert.match(await alternateSource.getAttribute('aria-label'), mistake.source);
-    const readScene = () => canvas.evaluate(async element => {
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      return element.toDataURL();
+  async function tryMistake(index, mistake, wrongDirection = false) {
+    assert(await alternateSource.isHidden(), `${name}: guided mode must not show alternate actions`);
+    assert(await alternateDestination.isHidden());
+    await selectMode('free');
+    assert(await actionHint.isHidden());
+    for (const marker of [source, destination, alternateSource, alternateDestination]) {
+      assert(await marker.evaluate(element => {
+        const styles = getComputedStyle(element);
+        return styles.display === 'none' || styles.visibility === 'hidden' || styles.opacity === '0' && styles.pointerEvents === 'none';
+      }));
+    }
+    await canvas.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => {
+      const marker = document.querySelector('[data-action="alternate-source"]');
+      return marker.style.left && marker.getBoundingClientRect().width > 0;
     });
     const before = await readScene();
-    if (phone) {
-      await act(alternateSource);
-      await alternateDestination.waitFor();
-      assert.match(await alternateDestination.getAttribute('aria-label'), mistake.target);
-      await act(alternateDestination);
+    let from, to;
+    if (wrongDirection) {
+      const [mainSource, mainDestination, bounds] = await Promise.all([freePoint(source), freePoint(destination), canvas.boundingBox()]);
+      const dx = mainDestination.x - mainSource.x;
+      const dy = mainDestination.y - mainSource.y;
+      const travel = 70 / Math.hypot(dx, dy);
+      from = mainSource;
+      to = {
+        x: Math.min(bounds.x + bounds.width - 18, Math.max(bounds.x + 18, from.x - dx * travel)),
+        y: Math.min(bounds.y + bounds.height - 18, Math.max(bounds.y + 18, from.y - dy * travel))
+      };
     } else {
-      const from = await point(alternateSource);
-      await page.mouse.move(from.x, from.y);
-      await page.mouse.down();
-      try {
-        await alternateDestination.waitFor();
-        assert.match(await alternateDestination.getAttribute('aria-label'), mistake.target);
-        const to = await point(alternateDestination);
-        await page.mouse.move(to.x, to.y, { steps: 10 });
-      } finally {
-        await page.mouse.up();
-      }
+      [from, to] = await Promise.all([freePoint(alternateSource), freePoint(alternateDestination)]);
     }
+    await freeDrag(from, to);
     await mistakeDialog.waitFor({ timeout: 7000 }).catch(async error => {
       await photo(`mistake-${mistake.id}-failure`);
       throw new Error(`${name}: mistake ${mistake.id} did not open (mode: ${await interactions.getAttribute('data-kind')}, status: ${await actionStatus.textContent()}, page errors: ${errors.join('; ')})`, { cause: error });
@@ -136,9 +193,11 @@ async function checkOxygen(phone) {
     assert.equal((await current.textContent()).trim()[0], keywords[index]);
     assert.equal(await complete.count(), index);
     assert.equal(await lab('assembly-count').textContent(), '6 / 6');
-    await photo(`mistake-${mistake.id}`);
+    await photo(`mistake-${mistake.id}${wrongDirection ? '-off-target' : ''}`);
     await act(retryStep);
     await mistakeDialog.waitFor({ state: 'hidden' });
+    assert.equal(await rootEl.getAttribute('data-learning-mode'), 'free');
+    await selectMode('guided');
     await sourceNamed(mistake.retry).waitFor();
     assert.equal((await current.textContent()).trim()[0], keywords[index]);
     assert.equal(await complete.count(), index);
@@ -212,6 +271,8 @@ async function checkOxygen(phone) {
     await page.goto(url);
     const standSlot = page.locator('[data-slot="stand"]');
     await standSlot.waitFor();
+    assert.equal(await rootEl.getAttribute('data-learning-mode'), 'guided');
+    assert.equal(await lab('guided-mode').getAttribute('aria-pressed'), 'true');
     assert.equal(await lab('assembly-count').textContent(), '0 / 6');
     assert(await page.locator('[data-instrument="tube"]').isDisabled());
     assert.equal(await rootEl.getAttribute('data-mode'), 'assembly');
@@ -232,6 +293,7 @@ async function checkOxygen(phone) {
     await sourceNamed(/热毛巾/).waitFor();
     await markersReady();
     const before = await scene('assembled');
+    assert(await confirmBubbles.isHidden());
     await act(destination);
     assert(await sourceNamed(/热毛巾/).isVisible());
     assert.equal(await source.getAttribute('aria-pressed'), 'false');
@@ -263,9 +325,11 @@ async function checkOxygen(phone) {
         assert.match(await destination.getAttribute('title'), targetLabel);
         assert(await lab('play').isHidden());
         const mistake = mistakes[`${index}:${operation}`];
-        if (mistake && !triedMistakes.has(mistake.id)) {
-          await tryMistake(index, mistake);
-          triedMistakes.add(mistake.id);
+        const wrongDirection = !phone && mistake && mistake.id !== 'order' && triedMistakes.has(mistake.id);
+        const attempt = wrongDirection ? `${mistake.id}:off-target` : mistake?.id;
+        if (mistake && !triedMistakes.has(attempt)) {
+          await tryMistake(index, mistake, wrongDirection);
+          triedMistakes.add(attempt);
           operation = -1;
           continue;
         }
@@ -280,6 +344,7 @@ async function checkOxygen(phone) {
         }
         if (index === 5 && operation === 0) await scene('jar-upright-on-table');
         await transfer();
+        if (index === 0) await confirmStableBubbles('guided');
       }
     }
 
@@ -324,13 +389,23 @@ async function checkOxygen(phone) {
     assert.equal(await lab('assembly-count').textContent(), '6 / 6');
     assert.equal(await complete.count(), 0);
     assert.equal((await current.textContent()).trim()[0], '查');
+    await selectMode('free');
+    assert(await actionHint.isHidden());
+    assert(await confirmBubbles.isHidden());
+    await canvas.scrollIntoViewIfNeeded();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await source.evaluate(element => getComputedStyle(element).opacity), '0');
+    assert.equal(await destination.evaluate(element => getComputedStyle(element).opacity), '0');
+    await freeDrag(await freePoint(source), await freePoint(destination));
+    await confirmStableBubbles('free');
+    await selectMode('guided');
     await act(lab('reset-assembly'));
     await standSlot.waitFor();
     assert.equal(await lab('assembly-count').textContent(), '0 / 6');
     assert.equal(await rootEl.getAttribute('data-mode'), 'assembly');
     assert(await source.isHidden());
     assert.deepEqual(errors, []);
-    console.log(`Oxygen ${name}: seven steps, three mistake retries, optional verification, and both resets passed.`);
+    console.log(`Oxygen ${name}: both practice modes and bubble confirmations, seven steps, three mistake retries, optional verification, and both resets passed.`);
   } finally {
     await page.close();
   }

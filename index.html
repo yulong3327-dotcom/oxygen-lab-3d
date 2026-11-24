@@ -34,6 +34,10 @@
             <button class="btn btn-ghost icon-btn" type="button" aria-label="缩小" title="缩小" data-lab="zoom-out" disabled><i class="icon" data-lucide="zoom-out" aria-hidden="true"></i></button>
             <button class="btn btn-ghost icon-btn" type="button" aria-label="恢复初始视角" title="恢复初始视角" data-lab="home" disabled><i class="icon" data-lucide="maximize" aria-hidden="true"></i></button>
           </div>
+          <div class="lab-mode" role="group" aria-label="实验模式">
+            <button class="btn btn-ghost" type="button" data-lab="guided-mode" aria-pressed="true">引导模式</button>
+            <button class="btn btn-ghost" type="button" data-lab="free-mode" aria-pressed="false">自由模式</button>
+          </div>
           <button class="btn btn-ghost play" type="button" data-lab="play" disabled hidden>
             <i class="icon" data-lucide="rotate-ccw" aria-hidden="true"></i><span data-lab="play-text">重做实验</span>
           </button>
@@ -68,6 +72,9 @@
           <div class="lab-overlay" data-lab="pins"></div>
           <div class="lab-overlay" data-lab="targets"></div>
           <div class="lab-overlay lab-interactions" data-lab="interactions" hidden></div>
+          <button class="btn btn-primary lab-confirm-bubbles" type="button" data-lab="confirm-bubbles" hidden>
+            <i class="icon" data-lucide="check" aria-hidden="true"></i>确认气泡均匀
+          </button>
           <p class="lab-fallback text-muted" role="status" data-lab="fallback">正在加载 3D 模型…</p>
         </div>
       </section>
