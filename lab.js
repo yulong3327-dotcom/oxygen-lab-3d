@@ -1027,7 +1027,7 @@
           ['查','检查气密性','将导管口浸入水中，用热毛巾微热空试管。导管口冒出气泡，说明装置气密性良好。'],
           ['装','装药和棉花','横放干燥试管，把盛有少量高锰酸钾的纸槽送到管底。抬高管口使药品滑落，抽出纸槽，再在管口内侧放一团疏松棉花。'],
           ['定','固定装置','塞紧橡胶塞，将试管口略向下固定，调整试管高度，使酒精灯外焰能加热试管。先把导管口放入水中。'],
-          ['点','点灯、预热','划燃火柴并点燃酒精灯。移动酒精灯来回预热试管，再用外焰对准药品所在部位加热。'],
+          ['点','点灯、预热','划燃火柴并点燃酒精灯。在试管底部附近左右拖动酒精灯预热，再用外焰对准药品所在部位加热。'],
           ['收','排水集气','给集气瓶装满水并盖好玻璃片，再倒置在水槽中，在水下移开玻璃片。等导管口的气泡连续、均匀后再收集。集满后在水下盖好玻璃片，取出并正放在实验桌上。'],
           ['离','移出导管','把导管移出水槽。此时酒精灯仍在燃烧。'],
           ['熄','熄灭酒精灯','用灯帽盖灭酒精灯。先移出导管，再停止加热，可防止水倒吸进试管。']
@@ -1074,7 +1074,7 @@
           '抬高试管口，让高锰酸钾从纸槽滑落到管底。',
           '抽出纸槽，在试管口内侧放一团疏松棉花。',
           '已调好试管高度，外焰对准试管底部。',
-          '来回移动酒精灯预热试管，再集中加热药品部位。',
+          '在试管底部附近左右拖动酒精灯预热，再集中加热药品部位。',
           '先把集气瓶装满水，盖好玻璃片后再倒置入水槽。',
           '已在水下移开玻璃片。先观察导管口，气泡连续、均匀后再收集。',
           '集气瓶已盖好玻璃片，正放在实验桌上。'
@@ -1230,7 +1230,7 @@
         const towelStart=V(-2.94,3.62,.60), towelEnd=V(-3.92,2.90,.32);
         const mouthWet=V(jarX,.71,jarZ), wick=V(lampX-.012,wickTip,lampZ);
         const tiltStart=.83, tiltEnd=1.04, heightAt=1.86, dipAt=2.55;
-        const strikeAt=1.10, litAt=2.12, matchAwayAt=2.92, preheatTo=3.83, preheatedAt=7.23, heatingAt=8.18;
+        const strikeAt=1.10, litAt=2.12, matchAwayAt=2.92, preheatedAt=3.65, heatingAt=4.55;
         const hotOuterFlameY=flame.position.y+.90;
         const matchStripStart=matchBoxCenter.clone().add(V(-.34,-.01,.322));
         const matchStripEnd=matchBoxCenter.clone().add(V(.34,-.01,.322));
@@ -1240,6 +1240,8 @@
         const clampGrip=V(standX,clampY,standZ);
         const heightGripTarget=clampGrip.clone();
         const lampGrip=V(lampX,.61,lampZ), preheatGrip=lampGrip.clone();
+        const preheatMin=closed.x+.04, preheatMax=closed.x+.99;
+        let preheatX=lampX, preheatVisited=0;
         const capSeatGrip=V(lampX,burnerSeat+.22,lampZ);
         const capRest=V(lampX+.85,.07,lampZ+.51);
         const jarPark=V(laterJar.x,2.35,laterJar.z), jarBath=V(jarX,2.18,jarZ);
@@ -1296,8 +1298,7 @@
           [
             grip('火柴','火柴盒擦火面',matchStart,matchStripEnd,0,strikeAt,'用火柴头划过火柴盒侧面的擦火条。'),
             grip('燃着的火柴','酒精灯灯芯',matchStripEnd,alignedWick,strikeAt,litAt,'用划燃的火柴点燃酒精灯灯芯。',matchAwayAt),
-            grip('酒精灯','试管中部下方',lampGrip,preheatGrip,matchAwayAt,preheatTo,'移动已点燃的酒精灯，开始给试管预热。'),
-            observe(preheatTo,preheatedAt,'酒精灯沿试管来回移动，使试管均匀受热。',3.4),
+            {kind:'preheat',source:'酒精灯',start:matchAwayAt,hint:'按住酒精灯，在试管底部附近左右拖动，两端都到达后松开。'},
             grip('酒精灯','装药一端的下方',preheatGrip,lampGrip,preheatedAt,heatingAt,'预热后将酒精灯移回装药处，用外焰集中加热。')
           ],
           [
@@ -1342,7 +1343,40 @@
         }
         const actionSource=actionButton('source','hand');
         const actionDestination=actionButton('destination','crosshair');
-        actionOverlay.append(actionLine,actionSource,actionDestination,actionHint);
+        const actionSvgNS='http://www.w3.org/2000/svg';
+        function guideSvg(className){
+          const svg=document.createElementNS(actionSvgNS,'svg');
+          svg.classList.add(className);
+          svg.setAttribute('aria-hidden','true');
+          return svg;
+        }
+        const guideElement=(svg,tag)=>{
+          const item=document.createElementNS(actionSvgNS,tag);
+          svg.append(item);
+          return item;
+        };
+        const drawGuide=(line,[x1,y1],[x2,y2])=>{
+          for(const [name,value] of Object.entries({x1,y1,x2,y2})) line.setAttribute(name,value);
+        };
+        const drawPoint=(point,[x,y])=>{
+          point.setAttribute('cx',x);point.setAttribute('cy',y);
+        };
+        const actionLeaders=guideSvg('lab-action-leaders');
+        const actionMarkers=['source','destination'].map(role=>{
+          const line=guideElement(actionLeaders,'line'), point=guideElement(actionLeaders,'circle');
+          point.setAttribute('r',2.5);
+          point.dataset.actionAnchor=role;
+          return {line,point};
+        });
+        const preheatTrack=guideSvg('lab-preheat-rail');
+        const preheatLine=guideElement(preheatTrack,'line');
+        const preheatEdges=['left','right'].map(edge=>{
+          const point=guideElement(preheatTrack,'circle');
+          point.setAttribute('r',4);
+          point.dataset.preheatEdge=edge;
+          return point;
+        });
+        actionOverlay.append(preheatTrack,actionLine,actionLeaders,actionSource,actionDestination,actionHint);
         window.lucide?.createIcons();
         const verificationStep=procedure.length;
         const finished=()=>step>=verificationStep&&!(step===verificationStep&&verifying);
@@ -1350,8 +1384,10 @@
         const verificationButton=el('verify-oxygen');
         let verifying=false;
         let suppressActionClick=0;
+        let preheatGuide;
         function resetExperiment(){
           step=0;time=0;phase=-1;selected=-1;actionIndex=0;verifying=false;steadyAt=0;
+          preheatX=lampX;preheatVisited=0;
           reaction=null;actionTouch=null;heldSource=false;
           clearActionDrag();
         }
@@ -1364,14 +1400,28 @@
           actionOverlay.hidden=!assembled;
           el('lines').toggleAttribute('hidden',!done);
           if(!assembled) return;
-          const manual=!!op?.source&&!reaction;
-          actionOverlay.dataset.kind=manual?'drag':'observe';
-          actionSource.hidden=actionDestination.hidden=actionLine.hidden=!manual;
+          const manual=!!op?.source&&!reaction, preheating=manual&&op.kind==='preheat';
+          actionOverlay.dataset.kind=preheating?'preheat':manual?'drag':'observe';
+          actionSource.hidden=!manual;
+          actionDestination.hidden=actionLine.hidden=!manual||preheating;
+          actionLeaders.toggleAttribute('hidden',!manual||preheating);
+          preheatTrack.toggleAttribute('hidden',!preheating);
           actionDestination.classList.toggle('is-near',manual&&heldSource);
           actionSource.setAttribute('aria-pressed',String(heldSource));
           actionStep.textContent=done?'实验完成':verifying?'检验氧气':('步骤 '+String(step+1).padStart(2,'0')+' · '+procedure[step][0]);
           actionMessage.textContent=done?(step>verificationStep?'带火星的木条复燃，检验为氧气。':'已先移出导管，再盖灭酒精灯。'):(reaction?.hint||op.hint);
-          if(manual){
+          if(preheating){
+            actionSource.removeAttribute('aria-pressed');
+            actionSource.setAttribute('role','slider');
+            actionSource.setAttribute('aria-label','左右拖动酒精灯预热');
+            actionSource.setAttribute('aria-valuemin','0');
+            actionSource.setAttribute('aria-valuemax','100');
+            actionSource.title='左右拖动酒精灯预热';
+            updatePreheatGuide();
+          } else {
+            for(const attr of ['role','aria-valuemin','aria-valuemax','aria-valuenow','aria-valuetext']) actionSource.removeAttribute(attr);
+          }
+          if(manual&&!preheating){
             actionSource.setAttribute('aria-label','选取'+op.source);
             actionSource.title=op.source;
             actionDestination.setAttribute('aria-label','放到'+op.destination);
@@ -1406,29 +1456,70 @@
         }
         function acceptAction(){
           const op=currentAction();
-          if(!op?.source||reaction) return;
+          if(!op?.source||op.kind==='preheat'||reaction) return;
           const outcome=step===0?'观察导管口是否冒出气泡。':step===1&&actionIndex===1?'观察药粒滑到试管底部。':step===verificationStep&&actionIndex===1?'观察带火星的木条是否复燃。':null;
           const keyboard=document.activeElement===actionDestination||document.activeElement===actionSource;
           if(op.finish===time){advanceAction();return;}
           runReaction(op.finish,reduced.matches?.20:Math.max(.19,Math.min(1.30,(op.finish-time)*.83)),outcome);
           reaction.keyboard=keyboard;
         }
+        function updatePreheatGuide(){
+          const percent=Math.round(100*(preheatX-preheatMin)/(preheatMax-preheatMin));
+          actionSource.setAttribute('aria-valuenow',String(percent));
+          actionSource.setAttribute('aria-valuetext',preheatVisited===3?'两端已到达':preheatVisited===1?'已到达管底一侧':preheatVisited===2?'已到达靠近管口的一侧':'在两端之间移动');
+          preheatEdges.forEach((point,i)=>point.classList.toggle('is-visited',!!(preheatVisited&(1<<i))));
+        }
+        function setPreheatX(x){
+          preheatX=U.clamp(x,preheatMin,preheatMax);
+          if(preheatX-preheatMin<.06) preheatVisited|=1;
+          if(preheatMax-preheatX<.06) preheatVisited|=2;
+          updatePreheatGuide();
+          request();
+        }
+        function layoutPreheat(){
+          const left=coords(lampGrip.clone().setX(preheatMin));
+          const right=coords(lampGrip.clone().setX(preheatMax));
+          const dx=right[0]-left[0],dy=right[1]-left[1],projected=Math.hypot(dx,dy);
+          const [ux,uy]=projected>=8?[dx/projected,dy/projected]:[1,0];
+          const span=Math.max(48,projected+10);
+          const cx=U.clamp((left[0]+right[0])/2,30+span/2,width-30-span/2);
+          const baseY=x=>coords(lampGrip.clone().set(x,0,lampGrip.z))[1];
+          const halfHeight=Math.abs(uy)*span/2;
+          const cy=U.clamp(Math.max(baseY(preheatMin),baseY(preheatMax))+19+halfHeight,30+halfHeight,height-27-halfHeight);
+          const ratio=(preheatX-preheatMin)/(preheatMax-preheatMin);
+          const from=[cx-ux*span/2,cy-uy*span/2];
+          const handle=[from[0]+ux*span*ratio,from[1]+uy*span*ratio];
+          const to=[from[0]+ux*span,from[1]+uy*span];
+          drawGuide(preheatLine,from,to);
+          drawPoint(preheatEdges[0],from);drawPoint(preheatEdges[1],to);
+          actionSource.style.left=handle[0]+'px';actionSource.style.top=handle[1]+'px';
+          preheatGuide={ux,uy,span,sourcePoint:coords(lampGrip.clone().setX(preheatX))};
+        }
+        function offsetActionMarkers(points,margin){
+          const clampPoint=([x,y])=>[U.clamp(x,margin,width-margin),U.clamp(y,margin,height-margin)];
+          const distance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+          const candidates=(origin,side)=>[
+            [side*28,20],[side*32,-15],[-side*28,20],[-side*32,-15],
+            [0,36],[0,-36],[side*49,0],[-side*49,0]
+          ].map(([dx,dy])=>clampPoint([origin[0]+dx,origin[1]+dy]));
+          const side=points[0][0]<=points[1][0]?-1:1;
+          let best,score=Infinity;
+          for(const a of candidates(points[0],side)) for(const b of candidates(points[1],-side)){
+            const overlap=Math.max(0,49-distance(a,b));
+            const cover=[a,b].reduce((total,p)=>total+points.reduce((n,anchor)=>n+Math.max(0,24-distance(anchor,p)),0),0);
+            const cost=overlap*20+cover*4+distance(a,points[0])+distance(b,points[1]);
+            if(cost<score){score=cost;best=[a,b];}
+          }
+          return best;
+        }
         function layoutAction(){
           const op=currentAction(), margin=24;
-          const placePoint=(p)=>{const [x,y]=coords(p);return [U.clamp(x,margin,width-margin),U.clamp(y,margin,height-margin)];};
+          const placePoint=(p)=>{const [x,y]=coords(p);return [U.clamp(x,3,width-3),U.clamp(y,3,height-3)];};
           actionHint.style.left='10px';
           actionHint.style.top='10px';
-          if(!op?.source||reaction) return;
-          const sourcePoint=placePoint(op.from), b=placePoint(op.to);
-          const a=step===0
-            ? [U.clamp(sourcePoint[0]+(width<520?35:46),margin,width-margin),Math.max(margin,sourcePoint[1]-13)]
-            : sourcePoint;
-          if(Math.hypot(b[0]-a[0],b[1]-a[1])<49){
-            const choices=[[a[0]+52,a[1]],[a[0]-52,a[1]],[a[0],a[1]+52],[a[0],a[1]-52]];
-            const valid=choices.filter(([x,y])=>x>=margin&&x<=width-margin&&y>=margin&&y<=height-margin);
-            valid.sort((c,d)=>Math.hypot(c[0]-b[0],c[1]-b[1])-Math.hypot(d[0]-b[0],d[1]-b[1]));
-            if(valid.length) [b[0],b[1]]=valid[0];
-          }
+          if(!op?.source||op.kind==='preheat'||reaction) return;
+          const sourcePoint=placePoint(op.from), targetPoint=placePoint(op.to);
+          const [a,b]=offsetActionMarkers([sourcePoint,targetPoint],margin);
           const hintW=actionHint.offsetWidth,hintH=actionHint.offsetHeight;
           const corners=[[10,10],[width-hintW-10,10],[10,height-hintH-10],[width-hintW-10,height-hintH-10]];
           const crowd=([left,top])=>[a,b].filter(([x,y])=>x+26>left&&x-26<left+hintW&&y+26>top&&y-26<top+hintH).length;
@@ -1438,11 +1529,18 @@
           for(const [btn,[x,y]] of [[actionSource,visibleSource],[actionDestination,b]]){
             btn.style.left=x+'px';btn.style.top=y+'px';
           }
+          [sourcePoint,targetPoint].forEach((point,i)=>{
+            const marker=actionMarkers[i];
+            drawPoint(marker.point,point);
+            drawGuide(marker.line,i===0?visibleSource:b,point);
+          });
+          actionMarkers[0].line.style.display=actionTouch?.point?'none':'';
+          actionMarkers[0].point.style.display=actionTouch?.point?'none':'';
           const dx=b[0]-visibleSource[0],dy=b[1]-visibleSource[1];
           actionLine.style.left=visibleSource[0]+'px';actionLine.style.top=visibleSource[1]+'px';
           actionLine.style.width=Math.hypot(dx,dy)+'px';
           actionLine.style.transform='rotate('+Math.atan2(dy,dx)+'rad)';
-          return {a,b,sourcePoint};
+          return {a,b,sourcePoint,targetPoint};
         }
         function clearActionDrag(){
           actionTouch=null;
@@ -1452,25 +1550,47 @@
         function actionPointerDown(e,handle){
           const op=currentAction();
           if(!assembled||!op?.source||reaction||actionTouch||e.button!==0) return false;
-          const bounds=stage.getBoundingClientRect(), path=layoutAction();
+          const bounds=stage.getBoundingClientRect(), x=e.clientX-bounds.left,y=e.clientY-bounds.top;
+          if(op.kind==='preheat'){
+            layoutPreheat();
+            if(!handle&&Math.hypot(x-preheatGuide.sourcePoint[0],y-preheatGuide.sourcePoint[1])>29) return false;
+            e.preventDefault();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            actionTouch={id:e.pointerId,x,y,preheat:true,preheatX,preheatVisited,guide:preheatGuide};
+            return true;
+          }
+          const path=layoutAction();
           if(!path) return false;
-          const x=e.clientX-bounds.left,y=e.clientY-bounds.top;
-          if(!handle&&Math.hypot(x-path.sourcePoint[0],y-path.sourcePoint[1])>39) return false;
+          if(!handle&&Math.hypot(x-path.sourcePoint[0],y-path.sourcePoint[1])>29) return false;
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
-          actionTouch={id:e.pointerId,x,y,...path,point:null,near:false};
+          actionTouch={id:e.pointerId,x,y,...path,handle,point:null,near:false};
           return true;
         }
         function actionPointerMove(e){
           const f=actionTouch;
           if(f?.id!==e.pointerId) return;
           const bounds=stage.getBoundingClientRect(), x=e.clientX-bounds.left,y=e.clientY-bounds.top;
+          if(f.preheat){
+            if(!f.moved&&Math.hypot(x-f.x,y-f.y)<4) return;
+            f.moved=true;
+            actionOverlay.dataset.dragging='';
+            const {ux,uy,span}=f.guide;
+            const travel=((x-f.x)*ux+(y-f.y)*uy)/span;
+            setPreheatX(f.preheatX+travel*(preheatMax-preheatMin));
+            return;
+          }
           if(!f.point&&Math.hypot(x-f.x,y-f.y)<5) return;
           actionOverlay.dataset.dragging='';
-          const op=currentAction(), dx=f.b[0]-f.a[0],dy=f.b[1]-f.a[1];
-          const px=f.a[0]+x-f.x,py=f.a[1]+y-f.y;
-          const progress=U.clamp(((px-f.a[0])*dx+(py-f.a[1])*dy)/(dx*dx+dy*dy),0,1);
-          f.near=Math.hypot(px-f.b[0],py-f.b[1])<31&&progress>.62;
+          const op=currentAction(), anchor=f.handle?f.a:f.sourcePoint;
+          const px=anchor[0]+x-f.x,py=anchor[1]+y-f.y;
+          const badgeDistance=Math.hypot(x-f.b[0],y-f.b[1]);
+          const pointDistance=Math.hypot(x-f.targetPoint[0],y-f.targetPoint[1]);
+          const target=badgeDistance<pointDistance?f.b:f.targetPoint;
+          const dx=target[0]-f.x,dy=target[1]-f.y;
+          const movement=Math.hypot(x-f.x,y-f.y);
+          const progress=dx*dx+dy*dy>16?U.clamp(((x-f.x)*dx+(y-f.y)*dy)/(dx*dx+dy*dy),0,1):0;
+          f.near=movement>10&&(badgeDistance<24||pointDistance<19)&&progress>.62;
           f.point=[U.clamp(px,24,width-24),U.clamp(py,24,height-24)];
           actionDestination.classList.toggle('is-near',f.near);
           time=U.lerp(op.start,op.end,progress);
@@ -1479,6 +1599,16 @@
         function actionPointerEnd(e,drop){
           const f=actionTouch;
           if(f?.id!==e.pointerId) return;
+          if(f.preheat){
+            const r=stage.getBoundingClientRect();
+            const onStage=drop&&e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom;
+            if(onStage&&f.moved) actionPointerMove(e);
+            if(!onStage){preheatVisited=f.preheatVisited;setPreheatX(f.preheatX);}
+            suppressActionClick=performance.now()+400;
+            clearActionDrag();
+            if(onStage&&preheatVisited===3) advanceAction();
+            return;
+          }
           if(f.point&&drop) actionPointerMove(e);
           suppressActionClick=performance.now()+400;
           clearActionDrag();
@@ -1492,9 +1622,17 @@
         document.addEventListener('pointerup',e=>actionPointerEnd(e,true));
         document.addEventListener('pointercancel',e=>actionPointerEnd(e,false));
         actionSource.addEventListener('click',e=>{
+          if(currentAction()?.kind==='preheat') return;
           if(e.detail!==0&&performance.now()<suppressActionClick) return;
           heldSource=!heldSource;syncAction();
           if(heldSource) actionDestination.focus({preventScroll:true});
+        });
+        actionSource.addEventListener('keydown',e=>{
+          if(currentAction()?.kind!=='preheat'||!['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) return;
+          e.preventDefault();
+          const direction=(e.key==='ArrowLeft'?-1:1)*Math.sign(preheatGuide?.ux||1);
+          setPreheatX(e.key==='Home'?preheatMin:e.key==='End'?preheatMax:preheatX+direction*.18);
+          if(preheatVisited===3) advanceAction();
         });
         actionDestination.addEventListener('click',()=>{
           if(heldSource) acceptAction();
@@ -1522,13 +1660,11 @@
           const tubeBottomAt=x=>closed.y+axis.y*(x-closed.x)/axis.x-tubeRadius/axis.x;
           const heatingHeight=hotOuterFlameY-tubeBottomAt(lampAimX+.03);
           const tubeLift=heatingHeight*clampProgress;
-          const sweep=step===3&&assembled?(time<preheatTo?ease(matchAwayAt,preheatTo):time<preheatedAt
-            ?.6+.4*Math.cos((time-preheatTo)/(preheatedAt-preheatTo)*twoPi*2):1-ease(preheatedAt,heatingAt)):0;
-          const preheatTravel=-1.60-lampAimX;
-          lampBodyGroup.position.set(preheatTravel*sweep,0,lampAimZ);
+          const preheatOffset=step===3&&assembled&&time>=matchAwayAt?(preheatX-lampX)*(1-ease(preheatedAt,heatingAt)):0;
+          lampBodyGroup.position.set(preheatOffset,0,lampAimZ);
           alignedWick.copy(wick).add(V(0,.015,lampZCorrection));
           lampGrip.z=lampZ+lampZCorrection;
-          preheatGrip.copy(lampGrip).add(V(preheatTravel,0,0));
+          preheatGrip.copy(lampGrip).setX(preheatX);
           capSeatGrip.z=lampGrip.z;
           heightGripTarget.y=clampGrip.y+heatingHeight;
           const p=step<4?0:step>4?1:U.clamp((time-fillStart)/(fillEnd-fillStart),0,1);
@@ -1704,7 +1840,7 @@
           const active=assembled&&scope(3,litAt)&&!scope(6,.84);
           flame.visible=active;
           // The glass limits the visible height of the flame along the sloped tube.
-          const outerScale=U.clamp((tubeBottomAt(lampAimX+.03+preheatTravel*sweep)+tubeLift-flame.position.y)/.93,.62,1);
+          const outerScale=U.clamp((tubeBottomAt(lampAimX+.03+preheatOffset)+tubeLift-flame.position.y)/.93,.62,1);
           if(active&&reaction&&!reduced.matches) {
             flame.rotation.z=.030*Math.sin(time*13)+.013*Math.sin(time*28);
             flame.scale.set(1+.041*Math.cos(time*18),outerScale*(.985+.033*Math.sin(time*16)),1);
@@ -1789,7 +1925,8 @@
           renderer.render(scene,camera);
           if(assembled){
             if(finished()) layoutPins(); else parts.forEach(p=>{p.btn.hidden=true;});
-            layoutAction();
+            if(currentAction()?.kind==='preheat'&&!reaction) layoutPreheat();
+            else layoutAction();
           } else layoutTargets();
           if(reaction||assembled&&step===4&&currentAction()?.start===bubblesReadyAt) request();
         }

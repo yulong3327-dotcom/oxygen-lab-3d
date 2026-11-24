@@ -22,7 +22,7 @@ const groups = [
   [[/热毛巾/, /试管底部/]],
   [[/纸槽/, /试管底部/], [/试管口/, /抬高/], [/纸槽/, /抽出/], [/棉花/, /试管口/]],
   [[/橡胶塞/, /试管口/], [/试管口/, /向下/], [/试管|铁夹/, /高度|外焰/], [/导管/, /水面下|水槽/]],
-  [[/火柴/, /擦火/], [/燃着的火柴/, /灯芯/], [/酒精灯/, /试管中部/], [/酒精灯/, /装药一端/]],
+  [[/火柴/, /擦火/], [/燃着的火柴/, /灯芯/], [null, null], [/酒精灯/, /装药一端/]],
   [[/盛水容器/, /集气瓶口/], [/玻璃片/, /瓶口/], [/盖好玻璃片的集气瓶/, /倒置/],
     [/玻璃片/, /水槽底/], [/导管/, /倒置的集气瓶口/], [/玻璃片/, /水中的集气瓶口/], [/集气瓶/, /桌面|台面/]],
   [[/导管/, /水面上方/]],
@@ -60,6 +60,7 @@ async function checkOxygen(phone) {
   const sourceNamed = name => source.and(page.getByRole('button', { name }));
   const destinationNamed = name => destination.and(page.getByRole('button', { name }));
   const actionStatus = page.locator('.lab-action-hint [role="status"]');
+  const interactions = lab('interactions');
   const act = locator => phone ? locator.tap() : locator.click();
   const photo = label => page.screenshot({ path: resolve(output, `${name}-${label}.png`), fullPage: true });
   const complete = list.locator('[data-step-state="complete"]');
@@ -88,6 +89,69 @@ async function checkOxygen(phone) {
     } else {
       await drag(page, await point(source), await point(destination));
     }
+  }
+
+  async function preheat() {
+    const grip = page.getByRole('slider', { name: '左右拖动酒精灯预热' });
+    const left = page.locator('[data-preheat-edge="left"]');
+    const right = page.locator('[data-preheat-edge="right"]');
+    const visited = '.is-visited';
+    const assertSweeping = async () => {
+      assert.equal(await interactions.getAttribute('data-kind'), 'preheat');
+      assert(await grip.isVisible());
+      assert(await destination.isHidden());
+      assert.match(await current.textContent(), /^点/);
+    };
+    await right.waitFor();
+    await assertSweeping();
+    const initial = await grip.getAttribute('aria-valuenow');
+    const rest = await scene('preheat-rest');
+    await act(grip);
+    await assertSweeping();
+    assert.equal(await grip.getAttribute('aria-valuenow'), initial);
+    assert.equal(await page.locator(`[data-preheat-edge]${visited}`).count(), 0);
+
+    const cdp = phone ? await page.context().newCDPSession(page) : null;
+    const dispatch = (type, point) => cdp.send('Input.dispatchTouchEvent', {
+      type,
+      touchPoints: point ? [{ x: point.x, y: point.y, id: 1 }] : []
+    });
+    const down = async point => {
+      if (cdp) await dispatch('touchStart', point);
+      else { await page.mouse.move(point.x, point.y); await page.mouse.down(); }
+    };
+    const move = async (from, to) => {
+      if (!cdp) { await page.mouse.move(to.x, to.y, { steps: 8 }); return; }
+      for (let i = 1; i <= 8; i++) {
+        await dispatch('touchMove', { x: from.x + (to.x - from.x) * i / 8, y: from.y + (to.y - from.y) * i / 8 });
+      }
+    };
+    const up = () => cdp ? dispatch('touchEnd') : page.mouse.up();
+    try {
+      let from = await point(grip), to = await point(right);
+      await down(from);
+      await move(from, to);
+      await assertSweeping();
+      await right.and(page.locator(visited)).waitFor();
+      assert.equal(await left.and(page.locator(visited)).count(), 0);
+      await up();
+      await assertSweeping();
+      const swept = await scene('preheat-swept');
+      assert(!rest.equals(swept), `${name}: dragging must move the rendered alcohol lamp`);
+      await photo('preheat-guide');
+
+      from = await point(grip);
+      to = await point(left);
+      await down(from);
+      await move(from, to);
+      await left.and(page.locator(visited)).waitFor();
+      await assertSweeping();
+      await up();
+    } finally {
+      await cdp?.detach();
+    }
+    await destinationNamed(/装药一端/).waitFor();
+    assert.match(await current.textContent(), /^点/);
   }
 
   try {
@@ -135,16 +199,14 @@ async function checkOxygen(phone) {
 
     for (const [index, operations] of groups.entries()) {
       for (const [operation, [sourceLabel, targetLabel]] of operations.entries()) {
-        await sourceNamed(sourceLabel).waitFor();
-        await destinationNamed(targetLabel).waitFor();
+        if (sourceLabel) await sourceNamed(sourceLabel).waitFor();
         assert.equal((await current.textContent()).trim()[0], keywords[index]);
         assert.equal(await complete.count(), index);
+        if (!targetLabel) { await preheat(); continue; }
+        await destinationNamed(targetLabel).waitFor();
         assert.match(await destination.getAttribute('title'), targetLabel);
         assert(await lab('play').isHidden());
         if (index === 3 && operation === 1) await scene('struck-match');
-        if (index === 3 && operation === 3) {
-          assert((await page.evaluate(() => window.oxygenObservations)).some(message => /酒精灯.*来回移动.*均匀受热/.test(message)));
-        }
         if (index === 4 && operation === 2) await scene('water-filled-and-covered');
         if (index === 4 && operation === 4) {
           assert((await page.evaluate(() => window.oxygenObservations)).some(message => /气泡.*连续.*均匀/.test(message)));
