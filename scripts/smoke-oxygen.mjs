@@ -114,6 +114,10 @@ async function checkOxygen(phone) {
     }
   }
 
+  async function twoFrames() {
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  }
+
   async function confirmStableBubbles(mode) {
     await confirmBubbles.waitFor({ timeout: 10000 });
     assert(await confirmBubbles.isEnabled());
@@ -174,7 +178,8 @@ async function checkOxygen(phone) {
       const dx = mainDestination.x - mainSource.x;
       const dy = mainDestination.y - mainSource.y;
       const travel = 70 / Math.hypot(dx, dy);
-      from = mainSource;
+      // The cotton is rendered above the old handle, which overlaps the stopper.
+      from = mistake.id === 'cotton' ? { x: mainSource.x - 9, y: mainSource.y - 31 } : mainSource;
       to = {
         x: Math.min(bounds.x + bounds.width - 18, Math.max(bounds.x + 18, from.x - dx * travel)),
         y: Math.min(bounds.y + bounds.height - 18, Math.max(bounds.y + 18, from.y - dy * travel))
@@ -185,7 +190,7 @@ async function checkOxygen(phone) {
     await freeDrag(from, to);
     await mistakeDialog.waitFor({ timeout: 7000 }).catch(async error => {
       await photo(`mistake-${mistake.id}-failure`);
-      throw new Error(`${name}: mistake ${mistake.id} did not open (mode: ${await interactions.getAttribute('data-kind')}, status: ${await actionStatus.textContent()}, page errors: ${errors.join('; ')})`, { cause: error });
+      throw new Error(`${name}: mistake ${mistake.id}${wrongDirection ? ' (reverse drag)' : ''} did not open (mode: ${await interactions.getAttribute('data-kind')}, status: ${await actionStatus.textContent()}, page errors: ${errors.join('; ')})`, { cause: error });
     });
     assert.equal(await mistakeDialog.getAttribute('data-mistake'), mistake.id);
     assert.match(await mistakeDialog.textContent(), mistake.explanation);
@@ -284,6 +289,7 @@ async function checkOxygen(phone) {
       const pick = page.locator(`[data-instrument="${id}"]`);
       const slot = page.locator(`[data-slot="${id}"]`);
       await slot.waitFor();
+      await twoFrames();
       if (phone) { await act(pick); await act(slot); }
       else await drag(page, await point(pick), await point(slot));
       assert.equal(await lab('assembly-count').textContent(), `${index + 1} / 6`);
@@ -392,12 +398,37 @@ async function checkOxygen(phone) {
     await selectMode('free');
     assert(await actionHint.isHidden());
     assert(await confirmBubbles.isHidden());
+    for (let zoom = 0; zoom < 2; zoom++) await act(lab('zoom-in'));
     await canvas.scrollIntoViewIfNeeded();
-    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await twoFrames();
     assert.equal(await source.evaluate(element => getComputedStyle(element).opacity), '0');
     assert.equal(await destination.evaluate(element => getComputedStyle(element).opacity), '0');
-    await freeDrag(await freePoint(source), await freePoint(destination));
+    const grip = await freePoint(source);
+    const target = await freePoint(destination);
+    const span = Math.hypot(target.x - grip.x, target.y - grip.y);
+    const dx = (target.x - grip.x) / span;
+    const dy = (target.y - grip.y) / span;
+    // Grab the visible right edge of the folded towel, away from its hidden handle.
+    const edge = { x: grip.x + (phone ? 24 : 43), y: grip.y + (phone ? 12 : 18) };
+    const staysAtTowel = async label => {
+      assert.equal(await interactions.getAttribute('data-kind'), 'drag', `${name}: ${label} must not start the airtightness check`);
+      assert(await confirmBubbles.isHidden());
+      assert(await mistakeDialog.isHidden());
+    };
+    if (phone) await page.touchscreen.tap(edge.x, edge.y);
+    else await page.mouse.click(edge.x, edge.y);
+    await staysAtTowel('a click without movement');
+    await freeDrag(edge, { x: edge.x - dx * 32, y: edge.y - dy * 32 });
+    await staysAtTowel('a reverse drag');
+
+    const forward = span * .54;
+    const sideways = phone ? 29 : 35;
+    const move = { x: dx * forward + dy * sideways, y: dy * forward - dx * sideways };
+    assert(Math.hypot(grip.x + move.x - target.x, grip.y + move.y - target.y) > 25,
+      `${name}: the gesture must miss the original drop area`);
+    await freeDrag(edge, { x: edge.x + move.x, y: edge.y + move.y });
     await confirmStableBubbles('free');
+    await act(lab('home'));
     await selectMode('guided');
     await act(lab('reset-assembly'));
     await standSlot.waitFor();
@@ -405,7 +436,7 @@ async function checkOxygen(phone) {
     assert.equal(await rootEl.getAttribute('data-mode'), 'assembly');
     assert(await source.isHidden());
     assert.deepEqual(errors, []);
-    console.log(`Oxygen ${name}: both practice modes and bubble confirmations, seven steps, three mistake retries, optional verification, and both resets passed.`);
+    console.log(`Oxygen ${name}: direct free-mode grip and directional drop, both bubble confirmations, seven steps, three mistake retries, optional verification, and both resets passed.`);
   } finally {
     await page.close();
   }

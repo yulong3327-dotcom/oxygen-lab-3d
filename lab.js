@@ -903,6 +903,11 @@
           }
           return {left,top,right,bottom};
         }
+        function nearAssemblyArea(slot,x,y,type){
+          const box=projectedBox(slot,V(0,0,0));
+          const padding=type==='touch'?27:22;
+          return x>=box.left-padding&&x<=box.right+padding&&y>=box.top-padding&&y<=box.bottom+padding;
+        }
         function moveDrag(e){
           if(drag?.id!==e.pointerId) return;
           if(!drag.avatar){
@@ -933,7 +938,7 @@
             const ax=x+drag.gripX,ay=y+drag.gripY;
             const radius=type==='touch'?35:34;
             const markerDistance=slot.btn.style.visibility==='hidden'?Infinity:Math.hypot(x-tx,y-ty);
-            drag.hit=Math.min(Math.hypot(ax-sx,ay-sy),markerDistance)<=radius;
+            drag.hit=freeMode?nearAssemblyArea(slot,ax,ay,type):Math.min(Math.hypot(ax-sx,ay-sy),markerDistance)<=radius;
             let delta=V(0,0,0);
             if(!drag.hit){
               const depth=slot.xyz.clone().project(camera).z;
@@ -1273,8 +1278,7 @@
           const pointer=fingers.get(e.pointerId);
           if(freeMode&&!assembled&&chosen&&fingers.size===1&&pointer&&!pointer.pan&&!pointer.moved){
             const r=stage.getBoundingClientRect(),slot=nextInstrument();
-            const [x,y]=coords(slot.xyz);
-            if(Math.hypot(x+r.left-e.clientX,y+r.top-e.clientY)<(e.pointerType==='touch'?34:28)) place(slot.id,chosen);
+            if(nearAssemblyArea(slot,e.clientX-r.left,e.clientY-r.top,e.pointerType)) place(slot.id,chosen);
           }
           fingers.delete(e.pointerId);
         });
@@ -1419,6 +1423,17 @@
             seconds:3.4
           }
         };
+        const freeSources=[
+          [[towel]],
+          [[chute],[tube],[chute],cottonTufts],
+          [[stopper,stopperLip],[tube],[clampMount,clampCollar],[distalPipe]],
+          [[match],[match],[lampBodyGroup],[lampBodyGroup]],
+          [[pitcher],[carriedPlate],[jarGroup],[carriedPlate],[],[distalPipe],[],[],[carriedPlate],[jarGroup]],
+          [[distalPipe]],
+          [[lampCap]],
+          [[lid,lidRim,carriedPlate],[splint]]
+        ];
+        const freeAlternateSources={cotton:[stopper,stopperLip],tilt:[lampBodyGroup],order:[lampCap]};
         let freeMode=false;
         root.dataset.learningMode='guided';
         const currentAlternate=()=>freeMode?Object.entries(alternateActions).find(([,op])=>op.step===step&&op.index===actionIndex):undefined;
@@ -1629,8 +1644,9 @@
         }
         function setPreheatX(x){
           preheatX=U.clamp(x,preheatMin,preheatMax);
-          if(preheatX-preheatMin<.06) preheatVisited|=1;
-          if(preheatMax-preheatX<.06) preheatVisited|=2;
+          const sweepMargin=freeMode?.18:.06;
+          if(preheatX-preheatMin<sweepMargin) preheatVisited|=1;
+          if(preheatMax-preheatX<sweepMargin) preheatVisited|=2;
           updatePreheatGuide();
           request();
         }
@@ -1642,7 +1658,7 @@
           if(!visible){preheatGuide=null;return;}
           const dx=right[0]-left[0],dy=right[1]-left[1],projected=Math.hypot(dx,dy);
           const [ux,uy]=projected>=8?[dx/projected,dy/projected]:[1,0];
-          const span=Math.max(48,projected+10);
+          const span=freeMode?Math.max(26,projected):Math.max(48,projected+10);
           const cx=U.clamp((left[0]+right[0])/2,30+span/2,width-30-span/2);
           const baseY=x=>coords(lampGrip.clone().set(x,0,lampGrip.z))[1];
           const halfHeight=Math.abs(uy)*span/2;
@@ -1714,6 +1730,36 @@
           return {id,from,to,a,b};
         }
         function onCanvas([x,y]){return x>=0&&x<=width&&y>=0&&y<=height;}
+        const gripRay=new T.Raycaster(), gripPoint=new T.Vector2();
+        function freeGrip(x,y,type,main,alternate){
+          const objects=[];
+          for(const [id,roots] of [['main',main],['alternate',alternate]]){
+            for(const root of roots){
+              let visible=true;
+              for(let parent=root;parent;parent=parent.parent) visible&&=parent.visible;
+              if(visible) root.traverseVisible(mesh=>{if(mesh.isMesh) objects.push({id,mesh});});
+            }
+          }
+          const meshes=objects.map(({mesh})=>mesh);
+          const slop=type==='touch'?14:8;
+          for(const [dx,dy] of [[0,0],[slop,0],[-slop,0],[0,slop],[0,-slop]]){
+            gripPoint.set(2*(x+dx)/width-1,1-2*(y+dy)/height);
+            gripRay.setFromCamera(gripPoint,camera);
+            const hit=gripRay.intersectObjects(meshes,false)[0];
+            if(hit) return objects.find(({mesh})=>mesh===hit.object).id;
+          }
+        }
+        function freeDrop(from,to,dx,dy,type){
+          const vx=to[0]-from[0],vy=to[1]-from[1],span=Math.hypot(vx,vy);
+          const moved=Math.hypot(dx,dy);
+          if(moved<(type==='touch'?10:8)) return false;
+          const along=span>.01?(dx*vx+dy*vy)/span:moved;
+          const across=span>.01?Math.abs(dx*vy-dy*vx)/span:0;
+          const padding=type==='touch'?9:0;
+          if(span<10) return moved<=46+padding&&(span<3||along>=0);
+          return along>=Math.max(5,span*.44)&&along<=span+Math.max(34,span*.6)+padding
+            &&across<=Math.max(24,Math.min(84,span*.48))+padding;
+        }
         function clearActionDrag(){
           actionTouch=null;
           hazardDrag=null;
@@ -1726,19 +1772,25 @@
           const bounds=stage.getBoundingClientRect(), x=e.clientX-bounds.left,y=e.clientY-bounds.top;
           if(op.kind==='preheat'){
             layoutPreheat();
-            if(!preheatGuide||!handle&&Math.hypot(x-preheatGuide.sourcePoint[0],y-preheatGuide.sourcePoint[1])>29) return false;
+            if(!preheatGuide||!handle&&(freeMode
+              ? !freeGrip(x,y,e.pointerType,[lampBodyGroup],[])&&Math.hypot(x-preheatGuide.sourcePoint[0],y-preheatGuide.sourcePoint[1])>20
+              : Math.hypot(x-preheatGuide.sourcePoint[0],y-preheatGuide.sourcePoint[1])>29)) return false;
             e.preventDefault();
             e.currentTarget.setPointerCapture(e.pointerId);
             actionTouch={id:e.pointerId,x,y,preheat:true,preheatX,preheatVisited,guide:preheatGuide};
             return true;
           }
-          const path=layoutAction();
+          const from=coords(op.from),to=coords(op.to);
+          const path=freeMode?{a:from,b:to,sourcePoint:from}:layoutAction();
           if(!path) return false;
-          const alt=layoutAlternate([path.a,path.b],([a,b])=>[U.clamp(a,24,width-24),U.clamp(b,24,height-24)]);
+          const altEntry=currentAlternate();
+          const alt=altEntry?{id:altEntry[0],from:coords(altEntry[1].from),to:coords(altEntry[1].to)}:null;
           const mainDistance=Math.hypot(x-path.sourcePoint[0],y-path.sourcePoint[1]);
           const altDistance=alt?Math.hypot(x-alt.from[0],y-alt.from[1]):Infinity;
-          const alternate=alt&&(handle==='alternate'||!handle&&altDistance<(e.pointerType==='touch'?32:28)&&altDistance<mainDistance);
-          if(handle==='alternate'&&!alternate||!handle&&!alternate&&mainDistance>39) return false;
+          const hit=freeMode&&!handle?freeGrip(x,y,e.pointerType,freeSources[step]?.[actionIndex]||[],alt?freeAlternateSources[alt.id]:[]):null;
+          const reach=e.pointerType==='touch'?25:18;
+          const alternate=alt&&(handle==='alternate'||!handle&&(hit==='alternate'||!hit&&altDistance<reach&&altDistance<mainDistance));
+          if(handle==='alternate'&&!alternate||!handle&&!alternate&&hit!=='main'&&mainDistance>(freeMode?reach:39)) return false;
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
           actionTouch={id:e.pointerId,x,y,...path,point:null,near:false,alternate:alternate?alt:null};
@@ -1766,11 +1818,11 @@
           actionOverlay.dataset.dragging='';
           if(f.alternate){
             const alt=f.alternate;
-            const px=alt.a[0]+x-f.x,py=alt.a[1]+y-f.y;
+            const px=alt.from[0]+x-f.x,py=alt.from[1]+y-f.y;
             f.point=[px,py];
-            f.near=Math.min(Math.hypot(px-alt.b[0],py-alt.b[1]),Math.hypot(x-alt.to[0],y-alt.to[1]))<30;
-            const dx=alt.b[0]-alt.a[0],dy=alt.b[1]-alt.a[1];
-            const progress=U.clamp(((px-alt.a[0])*dx+(py-alt.a[1])*dy)/Math.max(1,dx*dx+dy*dy),0,1);
+            f.near=freeDrop(alt.from,alt.to,x-f.x,y-f.y,e.pointerType);
+            const dx=alt.to[0]-alt.from[0],dy=alt.to[1]-alt.from[1];
+            const progress=U.clamp(((x-f.x)*dx+(y-f.y)*dy)/Math.max(1,dx*dx+dy*dy),0,1);
             const reference=alternateActions[alt.id].from;
             const depth=reference.clone().project(camera).z;
             const delta=V(2*(alt.from[0]+x-f.x)/width-1,1-2*(alt.from[1]+y-f.y)/height,depth).unproject(camera).sub(reference);
@@ -1781,9 +1833,8 @@
           const op=currentAction(), dx=f.b[0]-f.a[0],dy=f.b[1]-f.a[1];
           const px=f.a[0]+x-f.x,py=f.a[1]+y-f.y;
           const progress=U.clamp(((px-f.a[0])*dx+(py-f.a[1])*dy)/Math.max(1,dx*dx+dy*dy),0,1);
-          const dropRadius=freeMode?(e.pointerType==='touch'?25:19):31;
-          const minProgress=freeMode&&Math.hypot(dx,dy)<24?.32:.62;
-          f.near=Math.hypot(px-f.b[0],py-f.b[1])<dropRadius&&progress>minProgress;
+          f.near=freeMode?freeDrop(f.a,f.b,x-f.x,y-f.y,e.pointerType)
+            :Math.hypot(px-f.b[0],py-f.b[1])<31&&progress>.62;
           f.point=[U.clamp(px,24,width-24),U.clamp(py,24,height-24)];
           actionDestination.classList.toggle('is-near',f.near);
           const mistake=currentAlternate()?.[0];
@@ -1825,7 +1876,7 @@
             if(alternateSelected) alternateDestination.focus({preventScroll:true});
             return;
           }
-          if(drop&&f.near){acceptAction();return;}
+          if(drop&&f.near&&(!freeMode||inView)){acceptAction();return;}
           if(drop&&inView&&pose?.id==='tilt'&&pose.tilt>.10){
             demonstrateMistake('tilt',{tilt:pose.tilt});return;
           }
