@@ -20,14 +20,57 @@
         renderer.setClearColor(0, 0);
         renderer.outputColorSpace = T.SRGBColorSpace;
         renderer.toneMapping = T.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.12;
-        scene.add(new T.HemisphereLight(0xffffff, 0xb3beca, .92));
-        const key = new T.DirectionalLight(0xffffff, 1.28);
-        key.position.set(-4,8,4);
+        renderer.toneMappingExposure = 1.05;
+        const panels = [
+          {direction:V(-.56,.64,.51).normalize(), width:.24, height:.54, energy:3.4, rgb:[1,.93,.83]},
+          {direction:V(.67,.55,-.48).normalize(), width:.15, height:.57, energy:2.7, rgb:[.81,.91,1]},
+          {direction:V(.28,.32,.9).normalize(), width:.37, height:.30, energy:.85, rgb:[.87,.94,1]}
+        ];
+        for(const panel of panels){
+          panel.across=V(0,1,0).cross(panel.direction).normalize();
+          panel.up=panel.direction.clone().cross(panel.across).normalize();
+        }
+        // Bake a studio environment locally so both the bench and thumbnails work offline.
+        function studioEnvironment(){
+          const width=256, height=128, pixels=new Uint16Array(width*height*4);
+          const direction=V(0,0,0), half=T.DataUtils.toHalfFloat;
+          const edge=(value,size)=>1-T.MathUtils.smoothstep(Math.abs(value),size*.78,size);
+          for(let y=0;y<height;y++){
+            const latitude=((y+.5)/height-.5)*Math.PI;
+            for(let x=0;x<width;x++){
+              const longitude=((x+.5)/width-.5)*2*Math.PI;
+              direction.set(Math.cos(latitude)*Math.cos(longitude),Math.sin(latitude),Math.cos(latitude)*Math.sin(longitude));
+              const ambient=.095+.22*T.MathUtils.smoothstep(direction.y,-.25,.85);
+              let r=ambient*.94, g=ambient*.98, b=ambient;
+              for(const panel of panels){
+                if(direction.dot(panel.direction)<.64) continue;
+                const amount=panel.energy*edge(direction.dot(panel.across),panel.width)*edge(direction.dot(panel.up),panel.height);
+                r+=amount*panel.rgb[0];g+=amount*panel.rgb[1];b+=amount*panel.rgb[2];
+              }
+              const i=(y*width+x)*4;
+              pixels[i]=half(r);pixels[i+1]=half(g);pixels[i+2]=half(b);pixels[i+3]=half(1);
+            }
+          }
+          const map=new T.DataTexture(pixels,width,height,T.RGBAFormat,T.HalfFloatType);
+          map.mapping=T.EquirectangularReflectionMapping;
+          map.minFilter=map.magFilter=T.LinearFilter;
+          map.needsUpdate=true;
+          const pmrem=new T.PMREMGenerator(renderer);
+          const target=pmrem.fromEquirectangular(map);
+          pmrem.dispose();map.dispose();
+          return target;
+        }
+        const environment=studioEnvironment();
+        scene.environment=environment.texture;
+        scene.add(new T.HemisphereLight(0xf3f7ff,0x889099,.47));
+        const key = new T.DirectionalLight(0xfff0dc, 1.56);
+        key.position.copy(panels[0].direction).multiplyScalar(10);
         scene.add(key);
-        const rim = new T.DirectionalLight(0xffffff, .62);
-        rim.position.set(4,3,-5);
+        const rim = new T.DirectionalLight(0xdceaff, .55);
+        rim.position.copy(panels[1].direction).multiplyScalar(10);
         scene.add(rim);
+        const flameLight = new T.PointLight(0xffa45f,0,2.2,2);
+        scene.add(flameLight);
 
         const probe = document.createElement('span');
         probe.hidden = true;
@@ -85,37 +128,63 @@
           c.quaternion.setFromUnitVectors(V(0,1,0),bv.sub(av).normalize());
           return c;
         };
-        function glass(fn, strength) {
-          const studioWhite=p=>p.light?mix(p.bg,p.water,.035):mix(p.fg,p.water,.08);
+        function glass(fn, strength, options={}) {
           const mat = new T.ShaderMaterial({
-            uniforms:{tint:{value:fn(pal)},strength:{value:strength},reflection:{value:studioWhite(pal)}},
-            transparent:true, depthWrite:false, side:T.DoubleSide, forceSinglePass:true,
+            uniforms:{
+              tint:{value:fn(pal)}, strength:{value:strength},
+              centerOpacity:{value:options.opacity??.024},
+              panelDirection:{value:panels.map(panel=>panel.direction)},
+              panelAcross:{value:panels.map(panel=>panel.across)}, panelUp:{value:panels.map(panel=>panel.up)},
+              panelSize:{value:panels.map(panel=>new T.Vector2(panel.width,panel.height))},
+              panelColor:{value:panels.map(panel=>new T.Color(...panel.rgb))}
+            },
+            transparent:true, depthWrite:false, side:options.side??T.DoubleSide, forceSinglePass:true,
             vertexShader:'varying vec3 n; varying vec3 v; void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=isOrthographic?vec3(0.,0.,1.):-p.xyz;gl_Position=projectionMatrix*p;}',
             fragmentShader:[
-              'uniform vec3 tint; uniform vec3 reflection; uniform float strength;',
+              'uniform vec3 tint; uniform float strength; uniform float centerOpacity;',
+              'uniform vec3 panelDirection[3],panelAcross[3],panelUp[3],panelColor[3]; uniform vec2 panelSize[3];',
               'varying vec3 n; varying vec3 v;',
-              'float strip(vec3 ray,vec3 dir,vec3 across,float w,float h){vec3 up=normalize(cross(dir,across));return smoothstep(.4,.7,dot(ray,dir))*',
-              '(1.-smoothstep(w*.63,w,abs(dot(ray,across))))*(1.-smoothstep(h*.75,h,abs(dot(ray,up))));}',
-              'void main(){vec3 N=normalize(n);vec3 V=normalize(v);float grazing=1.-abs(dot(N,V));',
+              'void main(){vec3 N=normalize(n);vec3 V=normalize(v);float grazing=1.-clamp(abs(dot(N,V)),0.,1.);',
               'vec3 ray=normalize((vec4(reflect(-V,N),0.)*viewMatrix).xyz);',
-              'vec3 key=normalize(vec3(-.56,.62,.55)); vec3 fill=normalize(vec3(.62,.71,-.30));',
-              'float spec=.73*strip(ray,key,normalize(cross(vec3(0.,1.,0.),key)),.115,.60)+.34*strip(ray,fill,normalize(cross(vec3(0.,1.,0.),fill)),.22,.41);',
-              'float edge=pow(grazing,2.45);float base=strength*(.075+.82*edge);',
-              'float highlight=spec*(.35+.63*strength);float a=min(.89,base+highlight);',
-              'vec3 c=mix(tint,reflection,highlight/max(a,.001));gl_FragColor=vec4(c,a);',
+              'float fresnel=.04+.96*pow(grazing,4.2);',
+              'float body=centerOpacity+strength*.43*pow(grazing,2.65);',
+              'float reflected=0.;vec3 light=vec3(0.);',
+              'for(int i=0;i<3;i++){',
+              '  vec2 offset=abs(vec2(dot(ray,panelAcross[i]),dot(ray,panelUp[i])));',
+              '  vec2 box=1.-smoothstep(panelSize[i]*.68,panelSize[i],offset);',
+              '  float hit=smoothstep(.59,.77,dot(ray,panelDirection[i]))*box.x*box.y;',
+              '  float amount=hit*(.14+.55*strength+.38*fresnel)*(i==2?.36:1.);',
+              '  reflected+=amount;light+=amount*panelColor[i];',
+              '}',
+              'float base=body*(1.-min(reflected,.7));float weight=base+reflected;',
+              'gl_FragColor=vec4((tint*base+light)/max(weight,.001),min(weight,.9));',
               '#include <colorspace_fragment>',
               '}'
             ].join('\n')
           });
-          themed.push(p=>{mat.uniforms.tint.value.copy(fn(p));mat.uniforms.reflection.value.copy(studioWhite(p));});
+          themed.push(p=>mat.uniforms.tint.value.copy(fn(p)));
           return mat;
         }
-        const glassTint=p=>mix(p.water,p.fg,.35);
-        const glassEdge=flat(glassTint,{transparent:true,opacity:.55,depthWrite:false});
-        const steel=standard(p=>mix(p.muted,p.bg,p.light?.19:.26),{metalness:.24,roughness:.36});
-        const steelDark=standard(p=>mix(p.fg,p.muted,.38),{metalness:.13,roughness:.39});
-        const steelLight=standard(p=>mix(p.muted,p.bg,.45),{metalness:.17,roughness:.28});
-        const rubber=standard(p=>mix(p.fg,p.muted,.22),{roughness:.75});
+        const glassTint=()=>new T.Color(0x80aaa5);
+        const thinGlassTint=()=>new T.Color(0x648d8a);
+        const glassEdge=glass(glassTint,.78,{opacity:.12});
+        const steel=standard(()=>new T.Color(0x9ca5ad),{metalness:.93,roughness:.28,envMapIntensity:1.12});
+        const steelDark=standard(()=>new T.Color(0x56606a),{metalness:.7,roughness:.42});
+        const steelLight=standard(()=>new T.Color(0xc3c6c8),{metalness:.91,roughness:.22});
+        const grainsize=64, castingGrain=new Uint8Array(grainsize*grainsize*4);
+        let castingSeed=371;
+        for(let i=0;i<castingGrain.length;i+=4){
+          castingSeed=(Math.imul(castingSeed,1664525)+1013904223)>>>0;
+          castingGrain[i]=castingGrain[i+1]=castingGrain[i+2]=78+(castingSeed>>>25);
+          castingGrain[i+3]=255;
+        }
+        const castTexture=new T.DataTexture(castingGrain,grainsize,grainsize);
+        castTexture.magFilter=T.LinearFilter;
+        castTexture.minFilter=T.LinearMipmapLinearFilter;
+        castTexture.generateMipmaps=true;
+        castTexture.needsUpdate=true;
+        const castIron=standard(()=>new T.Color(0x363d40),{metalness:.28,roughness:.79,bumpMap:castTexture,bumpScale:.014});
+        const rubber=standard(()=>new T.Color(0x26292a),{roughness:.83});
         // Follow the camera in whole grid cells so the visible plane has no fixed world edge.
         const gridMat=new T.ShaderMaterial({
           uniforms:{tint:{value:pal.muted.clone()},focus:{value:new T.Vector2()}},
@@ -127,27 +196,30 @@
             'vec2 stripe=abs(fract(cells+.5)-.5)/pixel;',
             'float line=1.-smoothstep(.15,1.,min(stripe.x,stripe.y));',
             'float fade=(1.-smoothstep(13.,32.,length(ground-focus)))*(1.-smoothstep(.35,.75,max(pixel.x,pixel.y)));',
-            'gl_FragColor=vec4(tint,.17*line*fade);',
+            'gl_FragColor=vec4(tint,.105*line*fade);',
             '#include <colorspace_fragment>',
             '}'
           ].join('\n')
         });
         themed.push(p=>gridMat.uniforms.tint.value.copy(p.muted));
-        const groundGrid=mesh(new T.PlaneGeometry(150,150),gridMat,0,-.014,0);
+        const groundGrid=mesh(new T.PlaneGeometry(150,150),gridMat,0,-.014,0,scene,-1);
         groundGrid.rotation.x=-Math.PI/2;
-        function shade(x,z,rx,rz){
+        function shade(x,z,rx,rz,strength){
           const geo=new T.PlaneGeometry(rx*2,rz*2);
           const mat=new T.ShaderMaterial({transparent:true,depthWrite:false,
-            uniforms:{tint:{value:pal.fg.clone()},strength:{value:pal.light?.25:.17}},
+            uniforms:{tint:{value:pal.fg.clone()},strength:{value:strength*(pal.light?1:.72)},contact:{value:1}},
             vertexShader:'varying vec2 q; void main(){q=uv*2.-1.; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-            fragmentShader:'varying vec2 q; uniform vec3 tint; uniform float strength; void main(){float a=max(0.,1.-dot(q,q));gl_FragColor=vec4(tint,strength*a*a); \n#include <colorspace_fragment>\n}'});
-          themed.push(p=>{mat.uniforms.tint.value.copy(p.fg);mat.uniforms.strength.value=p.light?.25:.17;});
-          mesh(geo,mat,x,.002,z).rotation.x=-Math.PI/2;
+            fragmentShader:'varying vec2 q; uniform vec3 tint; uniform float strength,contact; void main(){float body=max(0.,1.-pow(abs(q.x),4.)-pow(abs(q.y),4.));float penumbra=pow(max(0.,1.-dot(q,q)),2.);gl_FragColor=vec4(tint,strength*contact*(.68*body*body+.32*penumbra)); \n#include <colorspace_fragment>\n}'});
+          themed.push(p=>{mat.uniforms.tint.value.copy(p.fg);mat.uniforms.strength.value=strength*(p.light?1:.72);});
+          const shadow=mesh(geo,mat,x,.002,z,scene,1);
+          shadow.rotation.x=-Math.PI/2;
+          shadow.userData.contactShadow=true;
+          return shadow;
         }
 
-        const glassTube=glass(glassTint,.63);
-        const glassRim=flat(p=>mix(p.water,p.fg,.38),{transparent:true,opacity:.72,depthWrite:false});
-        const shine=flat(p=>mix(p.bg,p.water,p.light?.16:.5),{transparent:true,opacity:.8,depthWrite:false});
+        const glassTube=glass(thinGlassTint,.76);
+        const glassRim=glass(glassTint,.92,{opacity:.15});
+        const shine=flat(()=>new T.Color(0xf4fafa),{transparent:true,opacity:.38,depthWrite:false});
         const apparatus=new Map();
         let workingStart=scene.children.length;
         function finishInstrument(id) {
@@ -160,9 +232,9 @@
           return instrument;
         }
         const standX=-4.10, standZ=-1.03;
-        shade(-4,-.65,1.35,1.05);
-        box(1.75,.13,1.44,steelDark,standX,.125,standZ);
-        box(1.67,.047,1.36,steel,standX,.196,standZ);
+        shade(standX+.13,standZ-.16,1.19,.95,.32);
+        box(1.75,.13,1.44,castIron,standX,.125,standZ);
+        box(1.67,.047,1.36,castIron,standX,.196,standZ);
         for(const xx of [-.72,.72]) for(const zz of [-.56,.56]) {
           cyl(.092,.103,.05,rubber,standX+xx,.035,standZ+zz);
         }
@@ -290,11 +362,11 @@
         finishInstrument('tube');
         const lampX=-3.88, lampZ=.31;
         const burnerSeat=.867, wickTip=1.105;
-        shade(-3.92,.38,1,.9);
-        const flint=p=>mix(p.muted,p.water,.20);
+        const lampShadow=shade(lampX+.07,lampZ-.05,.72,.66,.26);
+        const flint=()=>new T.Color(0xa2bdb5);
         const burner=glass(flint,.70);
-        const lampEdge=flat(flint,{transparent:true,opacity:.49,depthWrite:false});
-        const lampGleam=flat(p=>mix(p.bg,p.water,.18),{transparent:true,opacity:.65,depthWrite:false});
+        const lampEdge=glass(flint,.72,{opacity:.10});
+        const lampGleam=glass(flint,.7,{opacity:.055});
         const body=lathe([[0,.044],[.295,.044],[.352,.052],[.389,.080],[.408,.12],[.434,.19],[.464,.29],
           [.504,.43],[.521,.52],[.511,.578],[.480,.630],[.432,.676],[.360,.718],[.284,.754],
           [.220,.786],[.176,.835],[.158,.884],[.157,.916],[.178,.924],[.184,.947],[.183,.977],
@@ -302,7 +374,7 @@
           [.349,.679],[.424,.631],[.471,.573],[.486,.515],[.461,.423],[.429,.29],[.390,.15],
           [.363,.113],[.308,.101],[0,.101]],burner,lampX,0,lampZ,scene,6);
         body.name='Glass reservoir';
-        const fuel=flat(p=>mix(p.water,p.bg,.76),{transparent:true,opacity:.22,depthWrite:false,side:T.DoubleSide});
+        const fuel=glass(()=>new T.Color(0xc4d2c3),.30,{opacity:.052,side:T.FrontSide});
         const lampLiquid=lathe([[0,.105],[.317,.105],[.367,.117],[.399,.175],[.429,.285],[.474,.451],
           [.479,.468],[0,.468]],fuel,lampX,0,lampZ,scene,4);
         lampLiquid.name='Alcohol and meniscus';
@@ -365,7 +437,7 @@
         flame.visible=false;
         const lampGroup=finishInstrument('lamp');
         const lampBodyGroup=new T.Group();
-        lampBodyGroup.add(...lampGroup.children);
+        lampBodyGroup.add(...lampGroup.children.filter(ob=>ob!==lampShadow));
         lampGroup.add(lampBodyGroup);
 
         // Rounded bends preserve a connected passage into the mouth of the inverted jar.
@@ -389,7 +461,7 @@
           V(2.17,.31,.32),V(2.68,.31,.32),V(2.68,.72,.32)
         ];
         const pipeRoute=bent(routePoints);
-        const pipeGlass=glass(p=>mix(p.water,p.fg,.42),.64);
+        const pipeGlass=glass(thinGlassTint,.80,{opacity:.03});
         const sleeveStart=.342, sleeveEnd=.457;
         class PipeSection extends T.Curve {
           constructor(from,to){super();this.from=from;this.to=to;}
@@ -452,7 +524,7 @@
         }
 
         const tankX = 2.27, tankZ = .28, jarX = 2.68, jarZ = .32;
-        shade(2.6,.33,2.25,1.5);
+        shade(tankX+.12,tankZ-.09,2.25,1.53,.20);
         const poolLevel = .78;
         function tankOutline(width, length, radius, shape = new T.Shape()) {
           const hw = width / 2, hl = length / 2;
@@ -477,17 +549,15 @@
           band.renderOrder = order;
           return band;
         }
-        const basinGlass = glass(glassTint, .31);
+        const basinGlass = glass(glassTint,.43,{opacity:.018});
         const jarGlass = glass(glassTint, .56);
-        const labEdge = flat(p=>mix(p.water,p.fg,.2), {
-          transparent: true, opacity: .57, depthWrite: false
-        });
+        const labEdge = glass(glassTint,.85,{opacity:.115});
         basinBand(.105, .052, 4.25, 2.85, 0, basinGlass, 1);
         basinBand(.15, .79, 4.25, 2.85, .065, basinGlass, 3);
         basinBand(.9, .04, 4.28, 2.88, .095, labEdge, 4);
         basinBand(.128, .035, 4.24, 2.84, .082, labEdge, 2);
-        const waterTint = p=>mix(p.water,p.oxygen,.12);
-        const tankWater = flat(waterTint,{ transparent: true, opacity: .14, depthWrite: false, side: T.FrontSide });
+        const waterTint = ()=>new T.Color(0x80b1be);
+        const tankWater = flat(waterTint,{ transparent: true, opacity: .12, depthWrite: false, side: T.FrontSide });
         basinBand(.154, .624, 4.1, 2.70, .014, tankWater, 1);
         const tankSurfaceShape = tankOutline(4.1, 2.7, .12);
         const submergedJar = new T.Path();
@@ -495,8 +565,7 @@
         tankSurfaceShape.holes.push(submergedJar);
         const tankSurfaceGeometry = new T.ShapeGeometry(tankSurfaceShape, 32);
         tankSurfaceGeometry.rotateX(-Math.PI / 2);
-        const tankSurface = mesh(tankSurfaceGeometry, flat(waterTint,{ opacity: .25, transparent: true, depthWrite: false, side: T.DoubleSide
-        }), tankX, poolLevel, tankZ);
+        const tankSurface = mesh(tankSurfaceGeometry, glass(waterTint,.32,{opacity:.13}),tankX,poolLevel,tankZ);
         tankSurface.renderOrder = 2;
         const surfacePatch=mesh(new T.CircleGeometry(.631,48),tankSurface.material,jarX,poolLevel,jarZ,scene,2);
         surfacePatch.rotation.x=-Math.PI/2;
@@ -520,9 +589,7 @@
         const jarWaterMaterial = flat(waterTint, {
           opacity: .24, transparent: true, depthWrite: false, side: T.FrontSide
         });
-        const jarSurfaceMaterial = flat(p=>mix(p.water,p.oxygen,.2),{ opacity: .46, transparent: true,
-          depthWrite: false, side: T.DoubleSide
-        });
+        const jarSurfaceMaterial = glass(waterTint,.49,{opacity:.24});
         const waterSections = 32, waterColumns = 56;
         const jarWaterSides = new T.LatheGeometry(
           Array.from({ length: waterSections + 1 }, (_, i) => new T.Vector2(.7, i / waterSections)), waterColumns
@@ -573,6 +640,7 @@
         updateJar(.49, 3.23, false);
         const jarGroup=finishInstrument('jar');
         const laterJar=V(4.04,0,-2.03);
+        const jarShadow=shade(laterJar.x+.09,laterJar.z-.08,.89,.81,.23);
         const jarPivot=V(jarX,1.735,jarZ), jarRestPivot=V(laterJar.x,1.67,laterJar.z);
         function poseJar(mix=0,lift=0){
           jarGroup.rotation.z=Math.PI*(1-mix);
@@ -771,12 +839,13 @@
         const guideMeshes = {};
         scene.updateMatrixWorld(true);
         const previewScene=new T.Scene();
+        previewScene.environment=environment.texture;
         const previewCam=new T.OrthographicCamera(-1,1,1,-1,.1,60);
         previewScene.add(...scene.children.filter(ob=>ob.isLight).map(ob=>ob.clone()));
         function instrumentPreview(id){
           const icon=new T.Group();
           apparatus.get(id).traverseVisible(ob=>{
-            if(!ob.isMesh||ob.material.isShaderMaterial&&ob.geometry.type==='PlaneGeometry'||
+            if(!ob.isMesh||ob.userData.contactShadow||ob.material.isShaderMaterial&&ob.geometry.type==='PlaneGeometry'||
               crystals.includes(ob)||cottonTufts.includes(ob)) return;
             const part=new T.Mesh(ob.geometry,ob.material);
             part.matrix.copy(ob.matrixWorld);
@@ -812,7 +881,7 @@
             if(obj.isMesh && obj.visible) members.push(obj);
           });
           const hints=members.filter(obj=>{
-            if(obj.parent===flame||obj.material.isShaderMaterial&&obj.geometry.type==='PlaneGeometry') return false;
+            if(obj.userData.contactShadow||obj.parent===flame||obj.material.isShaderMaterial&&obj.geometry.type==='PlaneGeometry') return false;
             if(['IcosahedronGeometry','DodecahedronGeometry','TorusGeometry'].includes(obj.geometry.type)) return false;
             if(id==='jar') return obj===jarBody;
             if(id==='tank') return obj.geometry.type==='ExtrudeGeometry';
@@ -1737,7 +1806,7 @@
             for(const root of roots){
               let visible=true;
               for(let parent=root;parent;parent=parent.parent) visible&&=parent.visible;
-              if(visible) root.traverseVisible(mesh=>{if(mesh.isMesh) objects.push({id,mesh});});
+              if(visible) root.traverseVisible(mesh=>{if(mesh.isMesh&&!mesh.userData.contactShadow) objects.push({id,mesh});});
             }
           }
           const meshes=objects.map(({mesh})=>mesh);
@@ -2021,6 +2090,9 @@
           const preheatOffset=step===3&&assembled&&time>=matchAwayAt?(preheatX-lampX)*(1-ease(preheatedAt,heatingAt)):0;
           lampBodyGroup.position.set(preheatOffset,0,lampAimZ);
           if(hazardDrag?.id==='tilt'&&hazardDrag.lampOffset) lampBodyGroup.position.add(hazardDrag.lampOffset);
+          lampShadow.position.x=lampX+.07+lampBodyGroup.position.x;
+          lampShadow.position.z=lampZ-.05+lampBodyGroup.position.z;
+          lampShadow.material.uniforms.contact.value=Math.exp(-2*Math.max(0,lampBodyGroup.position.y));
           alignedWick.copy(wick).add(V(0,.015,lampZCorrection));
           lampGrip.z=lampZ+lampZCorrection;
           preheatGrip.copy(lampGrip).setX(preheatX);
@@ -2201,6 +2273,9 @@
           splint.rotation.z=.17;
           const active=assembled&&demoId!=='order'&&scope(3,litAt)&&!scope(6,.84);
           flame.visible=active;
+          flameLight.position.copy(flame.position).add(lampBodyGroup.position);
+          flameLight.position.y+=.55;
+          flameLight.intensity=active?.79:0;
           // The glass limits the visible height of the flame along the sloped tube.
           const outerScale=U.clamp((tubeBottomAt(lampAimX+.03+preheatOffset)+tubeLift-flame.position.y)/.93,.62,1);
           if(active&&reaction&&!reduced.matches) {
@@ -2305,6 +2380,11 @@
             else group.position.copy(loose.delta);
             group.visible=true;
           }
+          const jarCenter=jarPivot.clone().applyQuaternion(jarGroup.quaternion).add(jarGroup.position);
+          jarShadow.visible=jarGroup.visible;
+          jarShadow.position.x=jarCenter.x+.09;
+          jarShadow.position.z=jarCenter.z-.08;
+          jarShadow.material.uniforms.contact.value=Math.exp(-1.5*Math.max(0,jarCenter.y-jarRestPivot.y));
           renderer.render(scene,camera);
           if(assembled){
             if(finished()) layoutPins(); else parts.forEach(p=>{p.btn.hidden=true;});
