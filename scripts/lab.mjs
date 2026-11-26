@@ -4,7 +4,7 @@ import { dirname, extname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { assetKey, assets, fingerprints, init, localPath, publicCatalog, root, slug, validate } from './lab-core.mjs';
 
-const legacyFiles = ['index.html', 'lab.js', 'styles.css', 'favicon.svg', '.nojekyll'];
+const legacyFiles = ['index.html', 'lab.js', 'oxygen-glass-models.js', 'styles.css', 'favicon.svg', '.nojekyll'];
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.glb': 'model/gltf-binary' };
 const copy = (name, dest) => {
   const to = resolve(dest, name);

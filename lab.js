@@ -122,29 +122,51 @@
           mesh(new T.TorusGeometry(r,t,10,56),mat,x,y,z,parent,order);
         const lathe = (profile, mat, x,y,z,parent=scene,order=0) =>
           mesh(new T.LatheGeometry(profile.map(([r,h])=>new T.Vector2(r,h)),64),mat,x,y,z,parent,order);
+        function blenderMesh(name,material,x,y,z,parent=scene,order=0){
+          const data=globalThis.oxygenGlassModels[name];
+          const unpack=base64=>Uint8Array.from(atob(base64),letter=>letter.charCodeAt(0)).buffer;
+          const geometry=new T.BufferGeometry();
+          geometry.setAttribute('position',new T.BufferAttribute(new Float32Array(unpack(data.position)),3));
+          geometry.setAttribute('normal',new T.BufferAttribute(new Int8Array(unpack(data.normal)),3,true));
+          if(data.uv) geometry.setAttribute('uv',new T.BufferAttribute(new Float32Array(unpack(data.uv)),2));
+          geometry.setIndex(new T.BufferAttribute(new Uint16Array(unpack(data.index)),1));
+          const object=mesh(geometry,material,x,y,z,parent,order);
+          object.userData.blenderModel=name;
+          return object;
+        }
         const chord = (a,b,r,mat,parent=scene,order=0) => {
           const av=V(...a), bv=V(...b), m=av.clone().lerp(bv,.5);
           const c=cyl(r,r,av.distanceTo(bv),mat,m.x,m.y,m.z,parent,order,20);
           c.quaternion.setFromUnitVectors(V(0,1,0),bv.sub(av).normalize());
           return c;
         };
+        const refractionTarget=new T.WebGLRenderTarget(1,1);
+        const glassCapture={value:false};
+        const glassRefractionEnabled={value:false};
+        const glassSource={value:null};
+        const glassBackdrop={value:pal.bg.clone()};
+        themed.push(p=>glassBackdrop.value.copy(p.bg));
         function glass(fn, strength, options={}) {
           const mat = new T.ShaderMaterial({
             uniforms:{
               tint:{value:fn(pal)}, strength:{value:strength},
               centerOpacity:{value:options.opacity??.024},
+              capture:glassCapture, refractView:glassRefractionEnabled,
+              sceneColor:glassSource, backgroundColor:glassBackdrop,
+              wallThickness:{value:options.thickness??0},
               panelDirection:{value:panels.map(panel=>panel.direction)},
               panelAcross:{value:panels.map(panel=>panel.across)}, panelUp:{value:panels.map(panel=>panel.up)},
               panelSize:{value:panels.map(panel=>new T.Vector2(panel.width,panel.height))},
               panelColor:{value:panels.map(panel=>new T.Color(...panel.rgb))}
             },
             transparent:true, depthWrite:false, side:options.side??T.DoubleSide, forceSinglePass:true,
-            vertexShader:'varying vec3 n; varying vec3 v; void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=isOrthographic?vec3(0.,0.,1.):-p.xyz;gl_Position=projectionMatrix*p;}',
+            vertexShader:'varying vec3 n; varying vec3 v; varying vec4 projected; void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=isOrthographic?vec3(0.,0.,1.):-p.xyz;projected=projectionMatrix*p;gl_Position=projected;}',
             fragmentShader:[
               'uniform vec3 tint; uniform float strength; uniform float centerOpacity;',
+              'uniform bool capture,refractView; uniform sampler2D sceneColor; uniform vec3 backgroundColor; uniform float wallThickness;',
               'uniform vec3 panelDirection[3],panelAcross[3],panelUp[3],panelColor[3]; uniform vec2 panelSize[3];',
-              'varying vec3 n; varying vec3 v;',
-              'void main(){vec3 N=normalize(n);vec3 V=normalize(v);float grazing=1.-clamp(abs(dot(N,V)),0.,1.);',
+              'varying vec3 n; varying vec3 v; varying vec4 projected;',
+              'void main(){if(capture&&wallThickness>0.) discard;vec3 N=normalize(n);vec3 V=normalize(v);float grazing=1.-clamp(abs(dot(N,V)),0.,1.);',
               'vec3 ray=normalize((vec4(reflect(-V,N),0.)*viewMatrix).xyz);',
               'float fresnel=.04+.96*pow(grazing,4.2);',
               'float body=centerOpacity+strength*.43*pow(grazing,2.65);',
@@ -156,7 +178,17 @@
               '  float amount=hit*(.14+.55*strength+.38*fresnel)*(i==2?.36:1.);',
               '  reflected+=amount;light+=amount*panelColor[i];',
               '}',
-              'float base=body*(1.-min(reflected,.7));float weight=base+reflected;',
+              'float base=body*(1.-min(reflected,.7));',
+              'if(refractView&&wallThickness>0.&&gl_FrontFacing){',
+              '  vec2 uv=projected.xy/projected.w*.5+.5;',
+              '  vec3 refraction=refract(-V,N,1./1.48);',
+              '  vec2 distortion=refraction.xy*wallThickness*(.40+.60*grazing);',
+              '  vec4 behind=texture2D(sceneColor,clamp(uv+distortion,vec2(.001),vec2(.999)));',
+              '  vec3 transmitted=behind.rgb+backgroundColor*(1.-behind.a);',
+              '  float transmission=.23*(1.-fresnel)*(1.-min(reflected,.8))*behind.a;',
+              '  light+=transmission*transmitted;reflected+=transmission;',
+              '}',
+              'float weight=base+reflected;',
               'gl_FragColor=vec4((tint*base+light)/max(weight,.001),min(weight,.9));',
               '#include <colorspace_fragment>',
               '}'
@@ -217,9 +249,8 @@
           return shadow;
         }
 
-        const glassTube=glass(thinGlassTint,.76);
+        const glassTube=glass(thinGlassTint,.76,{thickness:.025});
         const glassRim=glass(glassTint,.92,{opacity:.15});
-        const shine=flat(()=>new T.Color(0xf4fafa),{transparent:true,opacity:.38,depthWrite:false});
         const apparatus=new Map();
         let workingStart=scene.children.length;
         function finishInstrument(id) {
@@ -233,21 +264,20 @@
         }
         const standX=-4.10, standZ=-1.03;
         shade(standX+.13,standZ-.16,1.19,.95,.32);
-        box(1.75,.13,1.44,castIron,standX,.125,standZ);
-        box(1.67,.047,1.36,castIron,standX,.196,standZ);
+        blenderMesh('standBase',castIron,standX,.1485,standZ);
         for(const xx of [-.72,.72]) for(const zz of [-.56,.56]) {
           cyl(.092,.103,.05,rubber,standX+xx,.035,standZ+zz);
         }
-        cyl(.187,.205,.16,steelDark,standX,.3,standZ);
-        cyl(.082,.082,3.25,steel,standX,1.92,standZ);
+        blenderMesh('standSocket',steelDark,standX,.3,standZ);
+        blenderMesh('standRod',steel,standX,1.92,standZ);
         cyl(.092,.092,.055,steelLight,standX,3.555,standZ);
         const clampX=-2.75, clampY=2.43, tubeZ=.32;
         const clampMount=new T.Group();
         scene.add(clampMount);
-        box(.37,.33,.32,steelDark,standX,clampY,standZ,clampMount);
+        blenderMesh('clampBlock',steelDark,standX,clampY,standZ,clampMount);
         chord([standX,clampY,standZ],[clampX,clampY,-.09],.061,steelLight,clampMount);
         chord([standX-.02,clampY,standZ],[standX-.35,clampY,standZ],.062,steelLight,clampMount);
-        box(.072,.217,.192,steel,standX-.355,clampY,standZ,clampMount);
+        blenderMesh('clampKnob',steel,standX-.355,clampY,standZ,clampMount);
         const standGroup=finishInstrument('stand');
 
         const closed=V(-4.27,2.6,tubeZ), mouth=V(-.64,2.25,tubeZ);
@@ -258,15 +288,7 @@
         tube.quaternion.setFromUnitVectors(V(0,1,0),axis.normalize());
         scene.add(tube);
         const tubeRadius=.344;
-        const glassProfile=[[0,-tubeRadius]];
-        for(let j=1;j<=12;j++){
-          const k=j/12*Math.PI/2;
-          glassProfile.push([tubeRadius*Math.sin(k),-tubeRadius*Math.cos(k)]);
-        }
-        glassProfile.push([tubeRadius,length],[.326,length+.018],[.296,length+.01]);
-        lathe(glassProfile,glassTube,0,0,0,tube,7);
-        torus(.331,.027,glassRim,0,length,0,tube,8).rotation.x=Math.PI/2;
-        torus(.307,.011,shine,0,length-.044,0,tube,8).rotation.x=Math.PI/2;
+        blenderMesh('tube',glassTube,0,0,0,tube,7);
         for(const [angle, a, b] of [[.51,.18,length-.24],[.66,.38,length-.46],[-.8,.33,length-.26]]){
           const x=Math.cos(angle)*.347,z=Math.sin(angle)*.347;
           line([V(x,a,z),V(x,b,z)],p=>mix(p.bg,p.water,p.light?.39:.56),angle===.66?.44:.72,tube,8);
@@ -302,7 +324,7 @@
         const thumbScrew=cyl(.065,.065,.043,jawScrew,.46,0,.182,clampCollar);
         thumbScrew.rotation.x=Math.PI/2;
         const stopY=length+.095;
-        const stopper=cyl(.283,.249,.285,rubber,0,stopY,0,tube);
+        const stopper=blenderMesh('stopper',rubber,0,stopY,0,tube);
         const stopperLip=cyl(.286,.286,.042,steelDark,0,stopY+.128,0,tube);
         const holeEdge=torus(.083,.018,rubber,0,stopY+.155,0,tube);
         holeEdge.rotation.x=Math.PI/2;
@@ -364,15 +386,10 @@
         const burnerSeat=.867, wickTip=1.105;
         const lampShadow=shade(lampX+.07,lampZ-.05,.72,.66,.26);
         const flint=()=>new T.Color(0xa2bdb5);
-        const burner=glass(flint,.70);
+        const burner=glass(flint,.70,{thickness:.048});
         const lampEdge=glass(flint,.72,{opacity:.10});
         const lampGleam=glass(flint,.7,{opacity:.055});
-        const body=lathe([[0,.044],[.295,.044],[.352,.052],[.389,.080],[.408,.12],[.434,.19],[.464,.29],
-          [.504,.43],[.521,.52],[.511,.578],[.480,.630],[.432,.676],[.360,.718],[.284,.754],
-          [.220,.786],[.176,.835],[.158,.884],[.157,.916],[.178,.924],[.184,.947],[.183,.977],
-          [.171,.991],[.134,.991],[.128,.958],[.131,.889],[.149,.824],[.193,.779],[.258,.729],
-          [.349,.679],[.424,.631],[.471,.573],[.486,.515],[.461,.423],[.429,.29],[.390,.15],
-          [.363,.113],[.308,.101],[0,.101]],burner,lampX,0,lampZ,scene,6);
+        const body=blenderMesh('lamp',burner,lampX,0,lampZ,scene,6);
         body.name='Glass reservoir';
         const fuel=glass(()=>new T.Color(0xc4d2c3),.30,{opacity:.052,side:T.FrontSide});
         const lampLiquid=lathe([[0,.105],[.317,.105],[.367,.117],[.399,.175],[.429,.285],[.474,.451],
@@ -382,8 +399,9 @@
           [.479,.007,.469,lampEdge],[.170,.011,.959,lampGleam],[.207,.009,.804,lampEdge]]) {
           torus(radius,thickness,mat,lampX,y,lampZ,scene,8).rotation.x=Math.PI/2;
         }
-        const porcelain=standard(p=>mix(p.bg,p.muted,p.light?.09:.48),{roughness:.33});
-        const wickSeat=lathe([[.050,.922],[.133,.922],[.144,.935],[.142,.959],[.130,.984],[.104,1.007],[.057,1.016],[.047,1.004]],porcelain,lampX,0,lampZ);
+        const porcelain=color(new T.MeshPhysicalMaterial({roughness:.25,clearcoat:.28,clearcoatRoughness:.22}),
+          p=>mix(p.bg,p.muted,p.light?.1:.36));
+        const wickSeat=blenderMesh('wickSeat',porcelain,lampX,0,lampZ);
         wickSeat.name='Porcelain wick holder';
         const wickPath=new T.CatmullRomCurve3([
           V(.187,.136,.094),V(-.024,.237,.057),V(-.120,.375,.024),V(-.084,.541,-.016),
@@ -549,13 +567,10 @@
           band.renderOrder = order;
           return band;
         }
-        const basinGlass = glass(glassTint,.43,{opacity:.018});
-        const jarGlass = glass(glassTint, .56);
+        const basinGlass = glass(glassTint,.43,{opacity:.018,thickness:.027});
+        const jarGlass = glass(glassTint,.56,{thickness:.034});
         const labEdge = glass(glassTint,.85,{opacity:.115});
-        basinBand(.105, .052, 4.25, 2.85, 0, basinGlass, 1);
-        basinBand(.15, .79, 4.25, 2.85, .065, basinGlass, 3);
-        basinBand(.9, .04, 4.28, 2.88, .095, labEdge, 4);
-        basinBand(.128, .035, 4.24, 2.84, .082, labEdge, 2);
+        blenderMesh('tank',basinGlass,tankX,0,tankZ,scene,3);
         const waterTint = ()=>new T.Color(0x80b1be);
         const tankWater = flat(waterTint,{ transparent: true, opacity: .12, depthWrite: false, side: T.FrontSide });
         basinBand(.154, .624, 4.1, 2.70, .014, tankWater, 1);
@@ -570,22 +585,14 @@
         const surfacePatch=mesh(new T.CircleGeometry(.631,48),tankSurface.material,jarX,poolLevel,jarZ,scene,2);
         surfacePatch.rotation.x=-Math.PI/2;
         surfacePatch.visible=false;
-        const rest = standard(p=>mix(p.muted,p.water,.13));
+        const rest = standard(()=>new T.Color(0x6b7981),{metalness:.72,roughness:.39});
         for(const dz of [-.405,.405]){
-          box(1.11,.041,.11,rest,jarX,.45,jarZ+dz);
+          blenderMesh('rackRail',rest,jarX,.45,jarZ+dz);
           for(const dx of [-.46,.46]) box(.091,.276,.091,rest,jarX+dx,.298,jarZ+dz);
         }
         finishInstrument('tank');
 
-        const jarBody = lathe([
-          [.565, .47], [.59, .50], [.59, .60], [.605, .67], [.635, .78], [.715, .90],
-          [.762, 1.02], [.77, 1.14], [.77, 3.19], [.763, 3.255], [.735, 3.32], [.69, 3.364],
-          [.62, 3.389], [.50, 3.39], [0, 3.39]
-        ], jarGlass, jarX, 0, jarZ);
-        jarBody.renderOrder = 3;
-        for (const [rad, y, thickness] of [[.576, .494, .022], [.595, .589, .012], [.685, 3.358, .014]]) {
-          torus(rad, thickness, labEdge, jarX, y, jarZ,scene,4).rotation.x=Math.PI/2;
-        }
+        const jarBody=blenderMesh('jar',jarGlass,jarX,0,jarZ,scene,3);
         const jarWaterMaterial = flat(waterTint, {
           opacity: .24, transparent: true, depthWrite: false, side: T.FrontSide
         });
@@ -753,7 +760,7 @@
         const matchLabel=standard(p=>mix(p.heat,p.fg,.36),{roughness:.88});
         const strikeStrip=standard(()=>new T.Color(0x703f34),{roughness:1});
         const grit=standard(()=>new T.Color(0xbd8666),{roughness:1});
-        box(.89,.23,.52,cardboard,0,0,0,matchBox);
+        blenderMesh('matchBox',cardboard,0,0,0,matchBox);
         box(.73,.005,.40,matchLabel,0,.117,0,matchBox);
         box(.80,.125,.009,strikeStrip,0,-.009,.264,matchBox);
         for(let i=0;i<18;i++){
@@ -884,7 +891,7 @@
             if(obj.userData.contactShadow||obj.parent===flame||obj.material.isShaderMaterial&&obj.geometry.type==='PlaneGeometry') return false;
             if(['IcosahedronGeometry','DodecahedronGeometry','TorusGeometry'].includes(obj.geometry.type)) return false;
             if(id==='jar') return obj===jarBody;
-            if(id==='tank') return obj.geometry.type==='ExtrudeGeometry';
+            if(id==='tank') return obj.userData.blenderModel==='tank';
             return true;
           });
           guideMeshes[id]=[];
@@ -1358,10 +1365,7 @@
         const seedPoint=V(-4.11,2.49,.32);
         let time=0,raf=0,steadyAt=0,actionIndex=0,actionTouch=null,reaction=null,heldSource=false;
         const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-        const lampCap=lathe([[.209,0],[.225,.007],[.226,.025],[.214,.039],[.208,.067],[.199,.26],
-          [.190,.319],[.167,.376],[.133,.411],[.081,.440],[.031,.450],[0,.451],[0,.420],
-          [.079,.411],[.125,.387],[.160,.343],[.177,.273],[.184,.065],[.185,.025],[.190,0],[.209,0]],
-          porcelain,lampX,burnerSeat,lampZ);
+        const lampCap=blenderMesh('lampCap',porcelain,lampX,burnerSeat,lampZ);
         lampCap.name='Porcelain snuffer cap';
         lampCap.visible=false;
         const zAxis=V(0,0,1);
@@ -1399,7 +1403,8 @@
         const carryRim=torus(.643,.016,glassRim,0,0,0,carriedPlate,10);
         carryRim.rotation.x=Math.PI/2;
         const pitcher=new T.Group();
-        lathe([[0,0],[.34,0],[.35,.04],[.39,.74],[.37,.78],[.35,.76],[.31,.09],[0,.07]],jarGlass,0,0,0,pitcher,3);
+        const pitcherGlass=glass(glassTint,.56);
+        lathe([[0,0],[.34,0],[.35,.04],[.39,.74],[.37,.78],[.35,.76],[.31,.09],[0,.07]],pitcherGlass,0,0,0,pitcher,3);
         const pitcherWater=cyl(.352,.316,.53,flat(waterTint,{transparent:true,opacity:.36,depthWrite:false}),0,.33,0,pitcher,2);
         const pourStream=cyl(.037,.044,1,flat(waterTint,{transparent:true,opacity:.72,depthWrite:false}),0,0,0,scene,6);
         const morphTube=mesh(new T.BufferGeometry(),pipeGlass,0,0,0,distalPipe,7);
@@ -2385,7 +2390,23 @@
           jarShadow.position.x=jarCenter.x+.09;
           jarShadow.position.z=jarCenter.z-.08;
           jarShadow.material.uniforms.contact.value=Math.exp(-1.5*Math.max(0,jarCenter.y-jarRestPivot.y));
+          if(tube.visible||lampGroup.visible||jarGroup.visible||apparatus.get('tank').visible){
+            // Render a smaller view without refractive shells, then sample it through each glass wall.
+            const scale=Math.min(.72,690/width);
+            const captureWidth=Math.max(1,Math.round(width*scale));
+            const captureHeight=Math.max(1,Math.round(height*scale));
+            refractionTarget.setSize(captureWidth,captureHeight);
+            glassCapture.value=true;
+            glassSource.value=null;
+            renderer.setRenderTarget(refractionTarget);
+            renderer.render(scene,camera);
+            renderer.setRenderTarget(null);
+            glassCapture.value=false;
+            glassSource.value=refractionTarget.texture;
+            glassRefractionEnabled.value=true;
+          }
           renderer.render(scene,camera);
+          glassRefractionEnabled.value=false;
           if(assembled){
             if(finished()) layoutPins(); else parts.forEach(p=>{p.btn.hidden=true;});
             if(currentAction()?.kind==='preheat'&&!reaction) layoutPreheat();
