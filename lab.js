@@ -153,6 +153,8 @@
         const glassSource={value:null};
         const studioFloor=p=>mix(p.bg,new T.Color(0x8c9fae),p.light?.66:.29);
         const glassBackdrop={value:studioFloor(pal)};
+        // The backdrop must fill both the main view and the glass refraction capture.
+        scene.background=glassBackdrop.value;
         themed.push(p=>glassBackdrop.value.copy(studioFloor(p)));
         function glass(fn, strength, options={}) {
           const mat = new T.ShaderMaterial({
@@ -234,19 +236,18 @@
         castTexture.needsUpdate=true;
         const castIron=blenderSurface('standBase',{bumpMap:castTexture,bumpScale:.014});
         const rubber=blenderSurface('stopper');
-        // Follow the camera in whole grid cells so the visible plane has no fixed world edge.
+        // Draw just the grid here so a grazing view cannot expose a backdrop edge.
         const gridMat=new T.ShaderMaterial({
-          uniforms:{tint:{value:pal.muted.clone()},base:{value:glassBackdrop.value},focus:{value:new T.Vector2()}},
-          depthWrite:false,
+          uniforms:{tint:{value:pal.muted.clone()},focus:{value:new T.Vector2()}},
+          transparent:true,depthWrite:false,
           vertexShader:'varying vec2 ground; void main(){ground=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
           fragmentShader:[
-            'uniform vec3 tint,base; uniform vec2 focus; varying vec2 ground;',
+            'uniform vec3 tint; uniform vec2 focus; varying vec2 ground;',
             'void main(){vec2 cells=2.*ground, pixel=max(fwidth(cells),vec2(.0001));',
             'vec2 stripe=abs(fract(cells+.5)-.5)/pixel;',
             'float line=1.-smoothstep(.15,1.,min(stripe.x,stripe.y));',
             'float fade=(1.-smoothstep(13.,32.,length(ground-focus)))*(1.-smoothstep(.35,.75,max(pixel.x,pixel.y)));',
-            'float softbox=.84+.16*exp(-dot(ground-focus,ground-focus)*.025);',
-            'gl_FragColor=vec4(mix(base*softbox,tint,.034*line*fade),1.);',
+            'gl_FragColor=vec4(tint,.034*line*fade);',
             '#include <colorspace_fragment>',
             '}'
           ].join('\n')
