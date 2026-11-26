@@ -590,7 +590,7 @@
           opacity:.018,thickness:.027,rimBand:[.883,.963,.15],reflectionSpread:[1.18,1.12]
         });
         const jarGlass = clearGlass({
-          thickness:.034,rimBand:[.454,.565,.16],reflectionSpread:[1.05,1.26]
+          thickness:.034,rimBand:[.452,.548,.16],reflectionSpread:[1.05,1.26]
         });
         blenderMesh('tank',basinGlass,tankX,0,tankZ,scene,3);
         const waterTint = ()=>new T.Color(0x80b1be);
@@ -598,13 +598,14 @@
         basinBand(.154, .624, 4.1, 2.70, .014, tankWater, 1);
         const tankSurfaceShape = tankOutline(4.1, 2.7, .12);
         const submergedJar = new T.Path();
-        submergedJar.absarc(jarX - tankX, tankZ - jarZ, .63, 0, Math.PI * 2, true);
+        const tankCutoutRadius=.498;
+        submergedJar.absarc(jarX - tankX, tankZ - jarZ, tankCutoutRadius, 0, Math.PI * 2, true);
         tankSurfaceShape.holes.push(submergedJar);
         const tankSurfaceGeometry = new T.ShapeGeometry(tankSurfaceShape, 32);
         tankSurfaceGeometry.rotateX(-Math.PI / 2);
         const tankSurface = mesh(tankSurfaceGeometry, glass(waterTint,.32,{opacity:.13}),tankX,poolLevel,tankZ);
         tankSurface.renderOrder = 2;
-        const surfacePatch=mesh(new T.CircleGeometry(.631,48),tankSurface.material,jarX,poolLevel,jarZ,scene,2);
+        const surfacePatch=mesh(new T.CircleGeometry(tankCutoutRadius+.001,48),tankSurface.material,jarX,poolLevel,jarZ,scene,2);
         surfacePatch.rotation.x=-Math.PI/2;
         surfacePatch.visible=false;
         const rest = blenderSurface('rackRail');
@@ -636,7 +637,11 @@
         meniscus.rotation.x=Math.PI/2;
         const jarWaterPositions = jarWaterSides.attributes.position;
         jarWaterPositions.setUsage(T.DynamicDrawUsage);
-        const jarInside = [[.49, .534], [.6, .549], [.67, .565], [.78, .591], [.90, .667], [1.02, .718], [1.14, .728], [3.23, .728]];
+        // Leave a little clearance inside the glass neck and shoulder.
+        const jarInside = [
+          [.49,.451],[.83,.451],[.876,.458],[.925,.477],[.964,.512],
+          [1.017,.577],[1.083,.641],[1.155,.689],[1.232,.713],[1.306,.723],[3.16,.721],[3.23,.707]
+        ];
         function jarWaterRadius(y) {
           for (let i = 1; i < jarInside.length; i++) {
             const [nextY, nextR] = jarInside[i];
@@ -645,7 +650,7 @@
               return T.MathUtils.lerp(lastR, nextR, (y - lastY) / (nextY - lastY));
             }
           }
-          return .728;
+          return jarInside.at(-1)[1];
         }
         const jarWaterAngles = Array.from({length: waterColumns + 1}, (_, col) => {
           const theta = col / waterColumns * Math.PI * 2;
@@ -680,10 +685,9 @@
         }
         poseJar();
         jarWaterMesh.visible=jarSurface.visible=meniscus.visible=false;
-        const lid=mesh(new T.CylinderGeometry(.648,.648,.034,56),glassEdge,jarX,.45,jarZ,jarGroup,9);
-        const lidRim=torus(.642,.013,glassRim,jarX,.448,jarZ,jarGroup,10);
-        lidRim.rotation.x=Math.PI/2;
-        lid.visible=lidRim.visible=false;
+        const plateCenterY=.45, plateClearance=.042;
+        const lid=blenderMesh('jarPlate',glassEdge,jarX,plateCenterY,jarZ,jarGroup,9);
+        lid.visible=false;
 
         const towel=new T.Group();
         const fabric=document.createElement('canvas');
@@ -1414,17 +1418,15 @@
         const capSeatGrip=V(lampX,burnerSeat+.22,lampZ);
         const capRest=V(lampX+.85,.07,lampZ+.51);
         const jarPark=V(laterJar.x,2.35,laterJar.z), jarBath=V(jarX,2.18,jarZ);
-        const testMouth=V(laterJar.x,jarRestPivot.y+jarPivot.y-.45,laterJar.z);
-        const jarMouthWet=V(jarX,.45,jarZ), waterPlateRest=V(1.2,.205,.70);
+        const testMouth=V(laterJar.x,jarRestPivot.y+jarPivot.y-plateCenterY,laterJar.z);
+        const jarMouthWet=V(jarX,plateCenterY+plateClearance,jarZ), waterPlateRest=V(1.2,.205,.70);
         const prepPlateRest=testMouth.clone().add(V(-1.15,-2.91,.31));
         const pitcherRest=testMouth.clone().add(V(1.08,-2.91,.21));
         const pitcherPour=testMouth.clone().add(V(.54,.44,.08));
         const plateRest=V(laterJar.x-1.12,3.3,laterJar.z+.45);
         const splintRest=V(laterJar.x-1.18,3.53,laterJar.z+.27);
         const mouthPoint=mouth.clone().add(V(0,.09,.12)), cottonStart=mouthPoint.clone().add(V(.88,.40,.1));
-        const carriedPlate=cyl(.647,.647,.038,glassEdge,0,0,0,scene,9);
-        const carryRim=torus(.643,.016,glassRim,0,0,0,carriedPlate,10);
-        carryRim.rotation.x=Math.PI/2;
+        const carriedPlate=mesh(lid.geometry,lid.material,0,0,0,scene,9);
         const pitcher=new T.Group();
         const pitcherGlass=clearGlass({thickness:.022});
         lathe([[0,0],[.34,0],[.35,.04],[.39,.74],[.37,.78],[.35,.76],[.31,.09],[0,.07]],pitcherGlass,0,0,0,pitcher,3);
@@ -1528,7 +1530,7 @@
           [[pitcher],[carriedPlate],[jarGroup],[carriedPlate],[],[distalPipe],[],[],[carriedPlate],[jarGroup]],
           [[distalPipe]],
           [[lampCap]],
-          [[lid,lidRim,carriedPlate],[splint]]
+          [[lid,carriedPlate],[splint]]
         ];
         const freeAlternateSources={cotton:[stopper,stopperLip],tilt:[lampBodyGroup],order:[lampCap]};
         let freeMode=false;
@@ -2139,7 +2141,11 @@
           const jarTravel=dippingJar?(time-prepCapAt)/(immerseAt-prepCapAt):liftingJar?1-(time-capAt)/(liftAt-capAt):inTank?1:0;
           const jarMix=U.smoothstep(jarTravel,.20,.78);
           const jarLift=movingJar?1.12*(U.smoothstep(jarTravel,0,.24)-U.smoothstep(jarTravel,.74,1)):0;
-          poseJar(assembled?jarMix:0,assembled?jarLift:0);
+          const plateSlide=ease(immerseAt,uncoverAt)*(1-ease(outletClearAt,capAt));
+          // Leave room for the glass plate between the lip and the submerged rack.
+          const plateClearOfRack=U.smoothstep(plateSlide,.83,1);
+          const supportLift=plateClearance*(inTank?1-plateClearOfRack:U.smoothstep(jarTravel,.76,1));
+          poseJar(assembled?jarMix:0,assembled?jarLift+supportLift:0);
           parts[3].xyz.copy(originalJarPin).applyQuaternion(jarGroup.quaternion).add(jarGroup.position);
           parts[4].xyz.copy(originalLampPin).add(lampBodyGroup.position);
           const showingWater=assembled&&step===4&&waterLoaded>0&&p<1;
@@ -2148,7 +2154,7 @@
           jarSurface.visible=meniscus.visible=showingWater&&(prep||inTank)&&(!inTank||p>0);
           surfacePatch.visible=!placed.has('jar')||!inTank;
           const hasLid=assembled&&(step===4&&time>=prepCapAt&&time<immerseAt||scope(4,capAt)&&!(verifying&&scope(verificationStep,.04)));
-          lid.visible=lidRim.visible=hasLid;
+          lid.visible=hasLid;
           const precapping=assembled&&step===4&&time<prepCapAt;
           const movingPlate=assembled&&step===4&&time>=immerseAt&&time<capAt;
           const testingPlate=assembled&&verifying&&step===verificationStep&&time>=.04&&time<.92;
@@ -2158,7 +2164,10 @@
             carriedPlate.position.copy(prepPlateRest).lerp(testMouth,progress);
             carriedPlate.position.y+=.70*Math.sin(Math.PI*progress);
           }
-          if(movingPlate) carriedPlate.position.copy(jarMouthWet).lerp(waterPlateRest,ease(immerseAt,uncoverAt)*(1-ease(outletClearAt,capAt)));
+          if(movingPlate){
+            carriedPlate.position.copy(jarMouthWet).lerp(waterPlateRest,plateSlide);
+            carriedPlate.position.y=U.lerp(jarMouthWet.y,waterPlateRest.y,plateClearOfRack);
+          }
           if(testingPlate) carriedPlate.position.copy(testMouth).lerp(plateRest,ease(.04,.92));
           pitcher.visible=assembled&&step===4&&time<prepCapAt;
           pourStream.visible=pitcher.visible&&time>.43&&time<1.34;
