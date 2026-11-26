@@ -157,6 +157,7 @@
         scene.background=glassBackdrop.value;
         themed.push(p=>glassBackdrop.value.copy(studioFloor(p)));
         function glass(fn, strength, options={}) {
+          const [panelWidth,panelHeight]=options.reflectionSpread??[1,1];
           const mat = new T.ShaderMaterial({
             uniforms:{
               tint:{value:fn(pal)}, strength:{value:strength},
@@ -167,7 +168,7 @@
               rimBand:{value:new T.Vector3(...(options.rimBand??[0,0,0]))},
               panelDirection:{value:panels.map(panel=>panel.direction)},
               panelAcross:{value:panels.map(panel=>panel.across)}, panelUp:{value:panels.map(panel=>panel.up)},
-              panelSize:{value:panels.map(panel=>new T.Vector2(panel.width,panel.height))},
+              panelSize:{value:panels.map(panel=>new T.Vector2(panel.width*panelWidth,panel.height*panelHeight))},
               panelColor:{value:panels.map(panel=>new T.Color(...panel.rgb))}
             },
             transparent:true, depthWrite:false, side:options.side??T.DoubleSide, forceSinglePass:true,
@@ -218,7 +219,8 @@
         }
         const glassTint=()=>new T.Color(0x839aab);
         const thinGlassTint=()=>new T.Color(0x647d8e);
-        const glassEdge=glass(glassTint,.78,{opacity:.12});
+        const clearGlass=options=>glass(thinGlassTint,.76,options);
+        const glassEdge=clearGlass({opacity:.08,thickness:.012});
         const steel=blenderSurface('standRod');
         const steelDark=standard(()=>new T.Color(0x56606a),{metalness:.7,roughness:.42});
         const steelLight=standard(()=>new T.Color(0xc3c6c8),{metalness:.91,roughness:.22});
@@ -268,7 +270,7 @@
           return shadow;
         }
 
-        const glassTube=glass(thinGlassTint,.76,{thickness:.025});
+        const glassTube=clearGlass({thickness:.025});
         const glassRim=glass(glassTint,.92,{opacity:.15});
         const apparatus=new Map();
         let workingStart=scene.children.length;
@@ -404,10 +406,9 @@
         const lampX=-3.88, lampZ=.31;
         const burnerSeat=.867, wickTip=1.105;
         const lampShadow=shade(lampX+.07,lampZ-.05,.72,.66,.26);
-        const flint=()=>new T.Color(0xa2bdb5);
-        const burner=glass(flint,.70,{thickness:.048});
-        const lampEdge=glass(flint,.72,{opacity:.10});
-        const lampGleam=glass(flint,.7,{opacity:.055});
+        const burner=clearGlass({thickness:.048,reflectionSpread:[1.10,1.20]});
+        const lampEdge=clearGlass({opacity:.085});
+        const lampGleam=clearGlass({opacity:.045});
         const body=blenderMesh('lamp',burner,lampX,0,lampZ,scene,6);
         body.name='Glass reservoir';
         const fuel=glass(()=>new T.Color(0xc4d2c3),.30,{opacity:.052,side:T.FrontSide});
@@ -585,8 +586,12 @@
           band.renderOrder = order;
           return band;
         }
-        const basinGlass = glass(glassTint,.43,{opacity:.018,thickness:.027,rimBand:[.883,.963,.18]});
-        const jarGlass = glass(glassTint,.56,{thickness:.034,rimBand:[.454,.565,.19]});
+        const basinGlass = clearGlass({
+          opacity:.018,thickness:.027,rimBand:[.883,.963,.15],reflectionSpread:[1.18,1.12]
+        });
+        const jarGlass = clearGlass({
+          thickness:.034,rimBand:[.454,.565,.16],reflectionSpread:[1.05,1.26]
+        });
         blenderMesh('tank',basinGlass,tankX,0,tankZ,scene,3);
         const waterTint = ()=>new T.Color(0x80b1be);
         const tankWater = flat(waterTint,{ transparent: true, opacity: .12, depthWrite: false, side: T.FrontSide });
@@ -1421,7 +1426,7 @@
         const carryRim=torus(.643,.016,glassRim,0,0,0,carriedPlate,10);
         carryRim.rotation.x=Math.PI/2;
         const pitcher=new T.Group();
-        const pitcherGlass=glass(glassTint,.56);
+        const pitcherGlass=clearGlass({thickness:.022});
         lathe([[0,0],[.34,0],[.35,.04],[.39,.74],[.37,.78],[.35,.76],[.31,.09],[0,.07]],pitcherGlass,0,0,0,pitcher,3);
         const pitcherWater=cyl(.352,.316,.53,flat(waterTint,{transparent:true,opacity:.36,depthWrite:false}),0,.33,0,pitcher,2);
         const pourStream=cyl(.037,.044,1,flat(waterTint,{transparent:true,opacity:.72,depthWrite:false}),0,0,0,scene,6);
