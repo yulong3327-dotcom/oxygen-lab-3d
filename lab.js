@@ -22,9 +22,9 @@
         renderer.toneMapping = T.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.05;
         const panels = [
-          {direction:V(-.56,.64,.51).normalize(), width:.24, height:.54, energy:3.4, rgb:[1,.93,.83]},
-          {direction:V(.67,.55,-.48).normalize(), width:.15, height:.57, energy:2.7, rgb:[.81,.91,1]},
-          {direction:V(.28,.32,.9).normalize(), width:.37, height:.30, energy:.85, rgb:[.87,.94,1]}
+          {direction:V(-.48,.65,.59).normalize(), width:.30, height:.45, energy:3.6, rgb:[1,.97,.91]},
+          {direction:V(.52,.58,-.63).normalize(), width:.24, height:.46, energy:4.1, rgb:[.84,.92,1]},
+          {direction:V(.04,.95,.30).normalize(), width:.52, height:.22, energy:2.0, rgb:[.97,.99,1]}
         ];
         for(const panel of panels){
           panel.across=V(0,1,0).cross(panel.direction).normalize();
@@ -134,6 +134,13 @@
           object.userData.blenderModel=name;
           return object;
         }
+        function blenderSurface(name, options={}) {
+          const {baseColor,roughness,metalness,clearcoat} = globalThis.oxygenGlassModels[name].material;
+          const params={color:new T.Color(...baseColor),roughness,metalness,...options};
+          return clearcoat
+            ? new T.MeshPhysicalMaterial({...params,clearcoat,clearcoatRoughness:roughness})
+            : new T.MeshStandardMaterial(params);
+        }
         const chord = (a,b,r,mat,parent=scene,order=0) => {
           const av=V(...a), bv=V(...b), m=av.clone().lerp(bv,.5);
           const c=cyl(r,r,av.distanceTo(bv),mat,m.x,m.y,m.z,parent,order,20);
@@ -144,8 +151,9 @@
         const glassCapture={value:false};
         const glassRefractionEnabled={value:false};
         const glassSource={value:null};
-        const glassBackdrop={value:pal.bg.clone()};
-        themed.push(p=>glassBackdrop.value.copy(p.bg));
+        const studioFloor=p=>mix(p.bg,new T.Color(0x8c9fae),p.light?.66:.29);
+        const glassBackdrop={value:studioFloor(pal)};
+        themed.push(p=>glassBackdrop.value.copy(studioFloor(p)));
         function glass(fn, strength, options={}) {
           const mat = new T.ShaderMaterial({
             uniforms:{
@@ -168,9 +176,9 @@
               'uniform vec3 rimBand;',
               'uniform vec3 panelDirection[3],panelAcross[3],panelUp[3],panelColor[3]; uniform vec2 panelSize[3];',
               'varying vec3 n; varying vec3 v; varying vec4 projected; varying float localHeight;',
-              'void main(){if(capture&&wallThickness>0.) discard;vec3 N=normalize(n);vec3 V=normalize(v);float grazing=1.-clamp(abs(dot(N,V)),0.,1.);',
+              'void main(){if(capture&&wallThickness>0.) discard;vec3 N=normalize(n);vec3 V=normalize(v);if(!gl_FrontFacing) N=-N;float grazing=1.-clamp(dot(N,V),0.,1.);',
               'vec3 ray=normalize((vec4(reflect(-V,N),0.)*viewMatrix).xyz);',
-              'float fresnel=.04+.96*pow(grazing,4.2);',
+              'float fresnel=.038+.962*pow(grazing,5.);',
               // The folded lip is thicker than the side wall and needs a clearer outline.
               'float rim=smoothstep(rimBand.x,rimBand.x+.015,localHeight)*(1.-smoothstep(rimBand.y-.018,rimBand.y,localHeight));',
               'float body=centerOpacity+strength*.43*pow(grazing,2.65)+rimBand.z*rim;',
@@ -179,17 +187,22 @@
               '  vec2 offset=abs(vec2(dot(ray,panelAcross[i]),dot(ray,panelUp[i])));',
               '  vec2 box=1.-smoothstep(panelSize[i]*.68,panelSize[i],offset);',
               '  float hit=smoothstep(.59,.77,dot(ray,panelDirection[i]))*box.x*box.y;',
-              '  float amount=hit*(.14+.55*strength+.38*fresnel)*(i==2?.36:1.);',
+              '  float amount=hit*(.10+.53*strength+.44*fresnel)*(i==2?.52:1.);',
               '  reflected+=amount;light+=amount*panelColor[i];',
+              '}',
+              // Glass reflects the darker side of the studio at shallow angles.
+              'if(wallThickness>0.){',
+              '  float edge=fresnel*(1.-min(reflected,1.))*(.26+.25*(1.-smoothstep(-.6,.15,ray.y)));',
+              '  light+=edge*mix(vec3(.055,.071,.085),backgroundColor,.24);reflected+=edge;',
               '}',
               'float base=body*(1.-min(reflected,.7));',
               'if(refractView&&wallThickness>0.&&gl_FrontFacing){',
               '  vec2 uv=projected.xy/projected.w*.5+.5;',
               '  vec3 refraction=refract(-V,N,1./1.48);',
-              '  vec2 distortion=refraction.xy*wallThickness*(.40+.60*grazing);',
+              '  vec2 distortion=refraction.xy*wallThickness*(.53+.47*grazing);',
               '  vec4 behind=texture2D(sceneColor,clamp(uv+distortion,vec2(.001),vec2(.999)));',
               '  vec3 transmitted=behind.rgb+backgroundColor*(1.-behind.a);',
-              '  float transmission=.23*(1.-fresnel)*(1.-min(reflected,.8))*behind.a;',
+              '  float transmission=.32*(1.-fresnel)*(1.-min(reflected,.8))*behind.a;',
               '  light+=transmission*transmitted;reflected+=transmission;',
               '}',
               'float weight=base+reflected;',
@@ -201,10 +214,10 @@
           themed.push(p=>mat.uniforms.tint.value.copy(fn(p)));
           return mat;
         }
-        const glassTint=()=>new T.Color(0x80aaa5);
-        const thinGlassTint=()=>new T.Color(0x648d8a);
+        const glassTint=()=>new T.Color(0x839aab);
+        const thinGlassTint=()=>new T.Color(0x647d8e);
         const glassEdge=glass(glassTint,.78,{opacity:.12});
-        const steel=standard(()=>new T.Color(0x9ca5ad),{metalness:.93,roughness:.28,envMapIntensity:1.12});
+        const steel=blenderSurface('standRod');
         const steelDark=standard(()=>new T.Color(0x56606a),{metalness:.7,roughness:.42});
         const steelLight=standard(()=>new T.Color(0xc3c6c8),{metalness:.91,roughness:.22});
         const grainsize=64, castingGrain=new Uint8Array(grainsize*grainsize*4);
@@ -219,20 +232,21 @@
         castTexture.minFilter=T.LinearMipmapLinearFilter;
         castTexture.generateMipmaps=true;
         castTexture.needsUpdate=true;
-        const castIron=standard(()=>new T.Color(0x363d40),{metalness:.28,roughness:.79,bumpMap:castTexture,bumpScale:.014});
-        const rubber=standard(()=>new T.Color(0x26292a),{roughness:.83});
+        const castIron=blenderSurface('standBase',{bumpMap:castTexture,bumpScale:.014});
+        const rubber=blenderSurface('stopper');
         // Follow the camera in whole grid cells so the visible plane has no fixed world edge.
         const gridMat=new T.ShaderMaterial({
-          uniforms:{tint:{value:pal.muted.clone()},focus:{value:new T.Vector2()}},
-          transparent:true,depthWrite:false,
+          uniforms:{tint:{value:pal.muted.clone()},base:{value:glassBackdrop.value},focus:{value:new T.Vector2()}},
+          depthWrite:false,
           vertexShader:'varying vec2 ground; void main(){ground=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
           fragmentShader:[
-            'uniform vec3 tint; uniform vec2 focus; varying vec2 ground;',
+            'uniform vec3 tint,base; uniform vec2 focus; varying vec2 ground;',
             'void main(){vec2 cells=2.*ground, pixel=max(fwidth(cells),vec2(.0001));',
             'vec2 stripe=abs(fract(cells+.5)-.5)/pixel;',
             'float line=1.-smoothstep(.15,1.,min(stripe.x,stripe.y));',
             'float fade=(1.-smoothstep(13.,32.,length(ground-focus)))*(1.-smoothstep(.35,.75,max(pixel.x,pixel.y)));',
-            'gl_FragColor=vec4(tint,.105*line*fade);',
+            'float softbox=.84+.16*exp(-dot(ground-focus,ground-focus)*.025);',
+            'gl_FragColor=vec4(mix(base*softbox,tint,.034*line*fade),1.);',
             '#include <colorspace_fragment>',
             '}'
           ].join('\n')
@@ -272,13 +286,13 @@
         for(const xx of [-.72,.72]) for(const zz of [-.56,.56]) {
           cyl(.092,.103,.05,rubber,standX+xx,.035,standZ+zz);
         }
-        blenderMesh('standSocket',steelDark,standX,.3,standZ);
+        blenderMesh('standSocket',steel,standX,.3,standZ);
         blenderMesh('standRod',steel,standX,1.92,standZ);
         cyl(.092,.092,.055,steelLight,standX,3.555,standZ);
         const clampX=-2.75, clampY=2.43, tubeZ=.32;
         const clampMount=new T.Group();
         scene.add(clampMount);
-        blenderMesh('clampBlock',steelDark,standX,clampY,standZ,clampMount);
+        blenderMesh('clampBlock',castIron,standX,clampY,standZ,clampMount);
         chord([standX,clampY,standZ],[clampX,clampY,-.09],.061,steelLight,clampMount);
         chord([standX-.02,clampY,standZ],[standX-.35,clampY,standZ],.062,steelLight,clampMount);
         blenderMesh('clampKnob',steel,standX-.355,clampY,standZ,clampMount);
@@ -403,8 +417,7 @@
           [.479,.007,.469,lampEdge],[.170,.011,.959,lampGleam],[.207,.009,.804,lampEdge]]) {
           torus(radius,thickness,mat,lampX,y,lampZ,scene,8).rotation.x=Math.PI/2;
         }
-        const porcelain=color(new T.MeshPhysicalMaterial({roughness:.25,clearcoat:.28,clearcoatRoughness:.22}),
-          p=>mix(p.bg,p.muted,p.light?.1:.36));
+        const porcelain=blenderSurface('wickSeat');
         const wickSeat=blenderMesh('wickSeat',porcelain,lampX,0,lampZ);
         wickSeat.name='Porcelain wick holder';
         const wickPath=new T.CatmullRomCurve3([
@@ -588,7 +601,7 @@
         const surfacePatch=mesh(new T.CircleGeometry(.631,48),tankSurface.material,jarX,poolLevel,jarZ,scene,2);
         surfacePatch.rotation.x=-Math.PI/2;
         surfacePatch.visible=false;
-        const rest = standard(()=>new T.Color(0x6b7981),{metalness:.72,roughness:.39});
+        const rest = blenderSurface('rackRail');
         for(const dz of [-.405,.405]){
           blenderMesh('rackRail',rest,jarX,.45,jarZ+dz);
           for(const dx of [-.46,.46]) box(.091,.276,.091,rest,jarX+dx,.298,jarZ+dz);
@@ -760,7 +773,7 @@
         splintFlame.visible=false;
         const matchBoxCenter=V(lampX-1.03,.14,lampZ+.72), matchBox=new T.Group();
         matchBox.position.copy(matchBoxCenter);
-        const cardboard=standard(p=>mix(p.bg,p.yellow,.43),{roughness:.95});
+        const cardboard=blenderSurface('matchBox');
         const matchLabel=standard(p=>mix(p.heat,p.fg,.36),{roughness:.88});
         const strikeStrip=standard(()=>new T.Color(0x703f34),{roughness:1});
         const grit=standard(()=>new T.Color(0xbd8666),{roughness:1});
