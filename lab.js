@@ -154,22 +154,26 @@
               capture:glassCapture, refractView:glassRefractionEnabled,
               sceneColor:glassSource, backgroundColor:glassBackdrop,
               wallThickness:{value:options.thickness??0},
+              rimBand:{value:new T.Vector3(...(options.rimBand??[0,0,0]))},
               panelDirection:{value:panels.map(panel=>panel.direction)},
               panelAcross:{value:panels.map(panel=>panel.across)}, panelUp:{value:panels.map(panel=>panel.up)},
               panelSize:{value:panels.map(panel=>new T.Vector2(panel.width,panel.height))},
               panelColor:{value:panels.map(panel=>new T.Color(...panel.rgb))}
             },
             transparent:true, depthWrite:false, side:options.side??T.DoubleSide, forceSinglePass:true,
-            vertexShader:'varying vec3 n; varying vec3 v; varying vec4 projected; void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=isOrthographic?vec3(0.,0.,1.):-p.xyz;projected=projectionMatrix*p;gl_Position=projected;}',
+            vertexShader:'varying vec3 n; varying vec3 v; varying vec4 projected; varying float localHeight; void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=isOrthographic?vec3(0.,0.,1.):-p.xyz;localHeight=position.y;projected=projectionMatrix*p;gl_Position=projected;}',
             fragmentShader:[
               'uniform vec3 tint; uniform float strength; uniform float centerOpacity;',
               'uniform bool capture,refractView; uniform sampler2D sceneColor; uniform vec3 backgroundColor; uniform float wallThickness;',
+              'uniform vec3 rimBand;',
               'uniform vec3 panelDirection[3],panelAcross[3],panelUp[3],panelColor[3]; uniform vec2 panelSize[3];',
-              'varying vec3 n; varying vec3 v; varying vec4 projected;',
+              'varying vec3 n; varying vec3 v; varying vec4 projected; varying float localHeight;',
               'void main(){if(capture&&wallThickness>0.) discard;vec3 N=normalize(n);vec3 V=normalize(v);float grazing=1.-clamp(abs(dot(N,V)),0.,1.);',
               'vec3 ray=normalize((vec4(reflect(-V,N),0.)*viewMatrix).xyz);',
               'float fresnel=.04+.96*pow(grazing,4.2);',
-              'float body=centerOpacity+strength*.43*pow(grazing,2.65);',
+              // The folded lip is thicker than the side wall and needs a clearer outline.
+              'float rim=smoothstep(rimBand.x,rimBand.x+.015,localHeight)*(1.-smoothstep(rimBand.y-.018,rimBand.y,localHeight));',
+              'float body=centerOpacity+strength*.43*pow(grazing,2.65)+rimBand.z*rim;',
               'float reflected=0.;vec3 light=vec3(0.);',
               'for(int i=0;i<3;i++){',
               '  vec2 offset=abs(vec2(dot(ray,panelAcross[i]),dot(ray,panelUp[i])));',
@@ -479,7 +483,7 @@
           V(2.17,.31,.32),V(2.68,.31,.32),V(2.68,.72,.32)
         ];
         const pipeRoute=bent(routePoints);
-        const pipeGlass=glass(thinGlassTint,.80,{opacity:.03});
+        const pipeGlass=glass(thinGlassTint,.89,{opacity:.055});
         const sleeveStart=.342, sleeveEnd=.457;
         class PipeSection extends T.Curve {
           constructor(from,to){super();this.from=from;this.to=to;}
@@ -567,9 +571,8 @@
           band.renderOrder = order;
           return band;
         }
-        const basinGlass = glass(glassTint,.43,{opacity:.018,thickness:.027});
-        const jarGlass = glass(glassTint,.56,{thickness:.034});
-        const labEdge = glass(glassTint,.85,{opacity:.115});
+        const basinGlass = glass(glassTint,.43,{opacity:.018,thickness:.027,rimBand:[.883,.963,.18]});
+        const jarGlass = glass(glassTint,.56,{thickness:.034,rimBand:[.454,.565,.19]});
         blenderMesh('tank',basinGlass,tankX,0,tankZ,scene,3);
         const waterTint = ()=>new T.Color(0x80b1be);
         const tankWater = flat(waterTint,{ transparent: true, opacity: .12, depthWrite: false, side: T.FrontSide });
@@ -608,7 +611,8 @@
         jarSurfaceGeo.rotateX(-Math.PI / 2);
         const jarSurface = mesh(jarSurfaceGeo, jarSurfaceMaterial, jarX, 3.23, jarZ);
         jarSurface.renderOrder = 2;
-        const meniscus = torus(1, .014, labEdge, jarX, 3.23, jarZ);
+        const waterEdge = glass(waterTint,.65,{opacity:.24});
+        const meniscus = torus(1, .018, waterEdge, jarX, 3.23, jarZ);
         meniscus.renderOrder = 4;
         meniscus.rotation.x=Math.PI/2;
         const jarWaterPositions = jarWaterSides.attributes.position;
